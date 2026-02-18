@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { ConversationTurn, Language, ChatSettings } from '../types/chat';
+import { getT } from '../utils/i18n';
 import TurnRow from './TurnRow';
 
 interface DualColumnViewProps {
@@ -22,15 +23,16 @@ const DualColumnView: React.FC<DualColumnViewProps> = ({ turns, settings, langua
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [turns]);
 
+  const t = getT(settings.sourceLanguage);
+
   const getLanguageName = (key: string) => {
     const lang = languages.find(l => l.key === key);
     return lang ? (lang.native_name || lang.name) : key;
   };
 
   const leftLang = settings.sourceLanguage;
-  const rightLang = 'english';
-
-  const leftSameAsRight = leftLang === rightLang;
+  const rightLang = settings.processingLanguage;
+  const sameLanguage = leftLang === rightLang;
 
   return (
     <div className="flex flex-col h-full">
@@ -40,14 +42,14 @@ const DualColumnView: React.FC<DualColumnViewProps> = ({ turns, settings, langua
           <span className="text-base">{langFlag[leftLang] ?? '🌐'}</span>
           <div>
             <div className="text-sm font-semibold text-gray-800">{getLanguageName(leftLang)}</div>
-            <div className="text-xs text-gray-400">原始 / 目标</div>
+            <div className="text-xs text-gray-400">{t.leftColLabel}</div>
           </div>
         </div>
         <div className="px-4 py-2 flex items-center gap-2">
           <span className="text-base">{langFlag[rightLang] ?? '🔤'}</span>
           <div>
             <div className="text-sm font-semibold text-gray-800">{getLanguageName(rightLang)}</div>
-            <div className="text-xs text-gray-400">处理语言</div>
+            <div className="text-xs text-gray-400">{t.rightColLabel}</div>
           </div>
         </div>
       </div>
@@ -55,13 +57,13 @@ const DualColumnView: React.FC<DualColumnViewProps> = ({ turns, settings, langua
       {/* Turn list */}
       <div className="flex-1 overflow-y-auto">
         {turns.length === 0 ? (
-          <div className="flex items-center justify-center h-full text-gray-400 text-sm select-none">
-            {leftSameAsRight
-              ? '两列显示相同内容（处理语言与目标语言相同）'
-              : '左列：目标语言  ·  右列：英文处理'}
+          <div className="flex items-center justify-center h-full text-gray-400 text-sm select-none px-8 text-center">
+            {sameLanguage ? t.emptyStateSame : t.emptyStateDiff}
           </div>
         ) : (
-          turns.map(turn => <TurnRow key={turn.id} turn={turn} />)
+          turns.map(turn => (
+            <TurnRow key={turn.id} turn={turn} sourceLanguage={settings.sourceLanguage} />
+          ))
         )}
         <div ref={bottomRef} />
       </div>

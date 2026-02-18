@@ -60,7 +60,7 @@ export interface ResponseType {
 
 export interface ChatSettings {
   sourceLanguage: string;
-  targetLanguage: string;
+  processingLanguage: string;
   responseType: string;
   translationMethod: string;
 }

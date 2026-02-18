@@ -24,37 +24,14 @@ class TranslatorAgent:
         self.language_config = LanguageConfig()
         self.config = config
 
-        self.google_translator = None
+        self.google_available = False
         try:
-            from googletrans import Translator
-            import nest_asyncio
-            
-            nest_asyncio.apply()
-            
-            self.google_translator = Translator()
-        except ImportError as e:
-            print(f"Warning: Required package not installed: {str(e)}")
-            print("Install with: pip install googletrans nest-asyncio")
-            self.google_translator = None
+            import googletrans  # noqa: F401 — just verify it's installed
+            self.google_available = True
+        except ImportError:
+            print("Warning: googletrans not installed. Install with: pip install googletrans")
         except Exception as e:
-            print(f"Warning: Failed to initialize Google Translate client: {str(e)}")
-            self.google_translator = None
-    
-    def google_translate_sync(self, text, src='auto', dest='en'):
-        """Synchronous wrapper for async Google Translate"""
-        try:
-            return asyncio.run(self.google_translator.translate(text, src=src, dest=dest))
-        except RuntimeError as e:
-            if "Event loop is closed" in str(e) or "cannot be called from a running event loop" in str(e):
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                try:
-                    result = loop.run_until_complete(self.google_translator.translate(text, src=src, dest=dest))
-                    return result
-                finally:
-                    loop.close()
-            else:
-                raise
+            print(f"Warning: Failed to import googletrans: {e}")
 
     def translate(self, text: str, source_language: str, target_language: str, method: str = "llm") -> str:
         """
@@ -91,36 +68,40 @@ class TranslatorAgent:
 
     def _translate_with_google(self, text: str, source_language: str, target_language: str) -> str:
         """
-        Translate using Google Translate API
+        Translate using Google Translate API.
 
-        Args:
-            text: Text to translate
-            source_language: Source language key
-            target_language: Target language key
-
-        Returns:
-            Translated text
+        Creates a fresh Translator and a dedicated event loop per call so that
+        the underlying httpx.AsyncClient is always used in the loop it was
+        created in — avoiding cross-loop issues when called from a thread pool.
         """
-        if not self.google_translator:
+        if not self.google_available:
             print("Google Translate not available, falling back to LLM translation")
             return self._translate_with_llm(text, source_language, target_language)
 
-        # Map our language keys to Google Translate language codes
         lang_mapping = {
             'english': 'en',
             'chinese': 'zh-cn',
             'japanese': 'ja',
-            'korean': 'ko'
+            'korean': 'ko',
         }
-
         source_code = lang_mapping.get(source_language, source_language)
         target_code = lang_mapping.get(target_language, target_language)
 
         try:
-            result = self.google_translate_sync(text, src=source_code, dest=target_code)
-            return result.text
+            from googletrans import Translator
+
+            async def _do() -> str:
+                async with Translator() as t:
+                    result = await t.translate(text, src=source_code, dest=target_code)
+                    return result.text
+
+            loop = asyncio.new_event_loop()
+            try:
+                return loop.run_until_complete(_do())
+            finally:
+                loop.close()
         except Exception as e:
-            print(f"Google Translate failed: {str(e)}, falling back to LLM translation")
+            print(f"Google Translate failed: {e}, falling back to LLM translation")
             return self._translate_with_llm(text, source_language, target_language)
 
     def _translate_with_llm(self, text: str, source_language: str, target_language: str) -> str:

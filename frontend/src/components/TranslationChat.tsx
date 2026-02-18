@@ -1,12 +1,20 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { ConversationTurn, WebSocketMessage, Language, ResponseType, ChatSettings } from '../types/chat';
+import { getT } from '../utils/i18n';
 import DualColumnView from './DualColumnView';
 import SettingsModal from './SettingsModal';
 import InputBar from './InputBar';
 
+const NATIVE_NAMES: Record<string, string> = {
+  english:  'English',
+  chinese:  '中文',
+  japanese: '日本語',
+  korean:   '한국어',
+};
+
 const DEFAULT_SETTINGS: ChatSettings = {
   sourceLanguage: 'english',
-  targetLanguage: 'english',
+  processingLanguage: 'english',
   responseType: 'general',
   translationMethod: 'google',
 };
@@ -48,14 +56,23 @@ const TranslationChat: React.FC = () => {
   const loadLanguages = async () => {
     try {
       const res = await fetch('/api/languages');
-      setLanguages(await res.json());
+      const data = await res.json();
+      // API returns display_name; map it to name, and override native_name from
+      // a frontend-controlled map so it's always correct regardless of backend value.
+      setLanguages(data.map((l: any) => ({
+        key: l.key,
+        name: l.display_name,
+        native_name: NATIVE_NAMES[l.key] ?? l.display_name,
+        code: l.code,
+      })));
     } catch {
-      setLanguages([
-        { key: 'english', name: 'English', native_name: 'English' },
-        { key: 'chinese', name: 'Chinese', native_name: '中文' },
-        { key: 'japanese', name: 'Japanese', native_name: '日本語' },
-        { key: 'korean', name: 'Korean', native_name: '한국어' },
-      ]);
+      setLanguages(
+        Object.entries(NATIVE_NAMES).map(([key, native]) => ({
+          key,
+          name: key.charAt(0).toUpperCase() + key.slice(1),
+          native_name: native,
+        }))
+      );
     }
   };
 
@@ -189,8 +206,8 @@ const TranslationChat: React.FC = () => {
       id: `${Date.now()}-${Math.random()}`,
       timestamp: new Date(),
       sourceLanguage: settings.sourceLanguage,
-      targetLanguage: settings.targetLanguage,
-      processingLanguage: 'english',
+      targetLanguage: settings.sourceLanguage,
+      processingLanguage: settings.processingLanguage,
       translationMethod: settings.translationMethod,
       leftUser: message,
       leftAi: '',
@@ -209,26 +226,28 @@ const TranslationChat: React.FC = () => {
       JSON.stringify({
         message,
         source_language: settings.sourceLanguage,
-        target_language: settings.targetLanguage,
+        target_language: settings.sourceLanguage,
         response_type: settings.responseType,
-        processing_language: 'english',
+        processing_language: settings.processingLanguage,
         translation_method: settings.translationMethod,
         conversation_history: conversationHistoryRef.current,
       })
     );
   };
 
+  const t = getT(settings.sourceLanguage);
+
   return (
     <div className="h-screen flex flex-col bg-white overflow-hidden">
       {/* Fixed header */}
       <header className="flex items-center justify-between px-6 py-3 bg-white border-b border-gray-200 flex-shrink-0">
-        <h1 className="text-lg font-semibold text-gray-900">Translation Chat</h1>
+        <h1 className="text-lg font-semibold text-gray-900">{t.appTitle}</h1>
         <button
           onClick={() => setSettingsOpen(true)}
           className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
         >
           <span>⚙</span>
-          <span>设置</span>
+          <span>{t.settings}</span>
         </button>
       </header>
 
@@ -238,7 +257,7 @@ const TranslationChat: React.FC = () => {
       </div>
 
       {/* Fixed input bar */}
-      <InputBar onSend={handleSend} disabled={isProcessing} />
+      <InputBar onSend={handleSend} disabled={isProcessing} sourceLanguage={settings.sourceLanguage} />
 
       {/* Settings modal */}
       <SettingsModal

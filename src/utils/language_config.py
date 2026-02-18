@@ -27,17 +27,17 @@ class LanguageConfig:
         SupportedLanguage.CHINESE.value: {
             "display_name": "Chinese",
             "code": "zh",
-            "native_name": "Chinese"
+            "native_name": "中文"
         },
         SupportedLanguage.JAPANESE.value: {
             "display_name": "Japanese",
             "code": "ja",
-            "native_name": "Japanese"
+            "native_name": "日本語"
         },
         SupportedLanguage.KOREAN.value: {
             "display_name": "Korean",
             "code": "ko",
-            "native_name": "Korean"
+            "native_name": "한국어"
         }
     }
 

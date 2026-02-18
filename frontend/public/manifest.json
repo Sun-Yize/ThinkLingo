@@ -1,0 +1,8 @@
+{
+  "short_name": "Translation Chat",
+  "name": "Translation-Based LLM Chat",
+  "start_url": ".",
+  "display": "standalone",
+  "theme_color": "#ffffff",
+  "background_color": "#ffffff"
+}

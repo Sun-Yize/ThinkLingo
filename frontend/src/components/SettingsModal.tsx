@@ -1,6 +1,7 @@
 import React from 'react';
 import Select from 'react-select';
 import { Language, ResponseType, ChatSettings } from '../types/chat';
+import { getT } from '../utils/i18n';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -10,11 +11,6 @@ interface SettingsModalProps {
   languages: Language[];
   responseTypes: ResponseType[];
 }
-
-const translationMethodOptions = [
-  { value: 'google', label: 'Google Translate (快速)' },
-  { value: 'llm', label: 'LLM Translation (高质量，支持流式)' },
-];
 
 const SettingsModal: React.FC<SettingsModalProps> = ({
   isOpen,
@@ -26,14 +22,24 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
 }) => {
   if (!isOpen) return null;
 
+  const t = getT(settings.sourceLanguage);
+
+  const translationMethodOptions = [
+    { value: 'google', label: t.translationMethodGoogle },
+    { value: 'llm',    label: t.translationMethodLLM },
+  ];
+
   const languageOptions = languages.map(l => ({
     value: l.key,
-    label: l.native_name ? `${l.name} (${l.native_name})` : l.name,
+    // Show native name; append English name in parens only when they differ
+    label: l.native_name && l.native_name !== l.name
+      ? `${l.native_name} (${l.name})`
+      : (l.native_name || l.name),
   }));
 
-  const responseTypeOptions = responseTypes.map(t => ({
-    value: t.key,
-    label: `${t.key} — ${t.description}`,
+  const responseTypeOptions = responseTypes.map(rt => ({
+    value: rt.key,
+    label: t.responseTypeLabels[rt.key] ?? `${rt.key} — ${rt.description}`,
   }));
 
   const update = (patch: Partial<ChatSettings>) =>
@@ -49,17 +55,18 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
         onClick={e => e.stopPropagation()}
       >
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-gray-800">⚙ 设置</h2>
+          <h2 className="text-lg font-semibold text-gray-800">⚙ {t.settings}</h2>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 text-xl leading-none"
+            className="text-gray-400 hover:text-gray-600 text-2xl leading-none"
           >
             ×
           </button>
         </div>
 
+        {/* Source language (= target language) */}
         <div>
-          <label className="block text-sm font-medium text-gray-600 mb-1">源语言</label>
+          <label className="block text-sm font-medium text-gray-600 mb-1">{t.sourceLanguage}</label>
           <Select
             value={languageOptions.find(o => o.value === settings.sourceLanguage) ?? null}
             onChange={opt => opt && update({ sourceLanguage: opt.value })}
@@ -69,19 +76,21 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
           />
         </div>
 
+        {/* Processing language */}
         <div>
-          <label className="block text-sm font-medium text-gray-600 mb-1">目标语言</label>
+          <label className="block text-sm font-medium text-gray-600 mb-1">{t.processingLanguage}</label>
           <Select
-            value={languageOptions.find(o => o.value === settings.targetLanguage) ?? null}
-            onChange={opt => opt && update({ targetLanguage: opt.value })}
+            value={languageOptions.find(o => o.value === settings.processingLanguage) ?? null}
+            onChange={opt => opt && update({ processingLanguage: opt.value })}
             options={languageOptions}
             isSearchable
             className="text-sm"
           />
         </div>
 
+        {/* Response type */}
         <div>
-          <label className="block text-sm font-medium text-gray-600 mb-1">回复类型</label>
+          <label className="block text-sm font-medium text-gray-600 mb-1">{t.responseType}</label>
           <Select
             value={responseTypeOptions.find(o => o.value === settings.responseType) ?? null}
             onChange={opt => opt && update({ responseType: opt.value })}
@@ -90,8 +99,9 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
           />
         </div>
 
+        {/* Translation method */}
         <div>
-          <label className="block text-sm font-medium text-gray-600 mb-1">翻译方式</label>
+          <label className="block text-sm font-medium text-gray-600 mb-1">{t.translationMethod}</label>
           <Select
             value={translationMethodOptions.find(o => o.value === settings.translationMethod) ?? null}
             onChange={opt => opt && update({ translationMethod: opt.value })}
@@ -105,7 +115,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
             onClick={onClose}
             className="w-full py-2 bg-gray-800 text-white rounded-xl text-sm font-medium hover:bg-gray-700 transition-colors"
           >
-            完成
+            {t.done}
           </button>
         </div>
       </div>

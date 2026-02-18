@@ -1,6 +1,7 @@
 import React from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { getT } from '../utils/i18n';
 
 export type BubbleStatus = 'idle' | 'pending' | 'translating' | 'streaming' | 'complete';
 
@@ -8,10 +9,12 @@ interface MessageBubbleProps {
   role: 'user' | 'ai';
   content: string;
   status: BubbleStatus;
+  sourceLanguage: string;
 }
 
-const MessageBubble: React.FC<MessageBubbleProps> = ({ role, content, status }) => {
+const MessageBubble: React.FC<MessageBubbleProps> = ({ role, content, status, sourceLanguage }) => {
   const isUser = role === 'user';
+  const t = getT(sourceLanguage);
 
   if (status === 'idle') return null;
 
@@ -24,7 +27,9 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ role, content, status }) 
             ${isUser ? 'bg-blue-500' : 'bg-gray-100'}
           `}
         >
-          <span className={`text-xs ${isUser ? 'text-blue-200' : 'text-gray-400'}`}>翻译中…</span>
+          <span className={`text-xs ${isUser ? 'text-blue-200' : 'text-gray-400'}`}>
+            {t.translating}
+          </span>
           <div className="translating-skeleton w-20 h-3 rounded-full" />
         </div>
       </div>
@@ -47,7 +52,9 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ role, content, status }) 
           <span className="whitespace-pre-wrap">{content}</span>
         ) : (
           <div className="markdown-body">
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>{content || (status === 'streaming' ? ' ' : '')}</ReactMarkdown>
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>
+              {content || (status === 'streaming' ? '\u200b' : '')}
+            </ReactMarkdown>
           </div>
         )}
       </div>
