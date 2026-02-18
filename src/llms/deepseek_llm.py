@@ -4,7 +4,7 @@ Uses DeepSeek API for text generation
 """
 
 import os
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, Generator
 from openai import OpenAI
 from .base import BaseLLM
 
@@ -78,6 +78,30 @@ class DeepSeekLLM(BaseLLM):
         except Exception as e:
             print(f"DeepSeek API call error: {str(e)}")
             raise e
+
+    def invoke_stream(self, system_prompt: str, user_prompt: str, messages: Optional[list] = None, **kwargs) -> Generator[str, None, None]:
+        """
+        Call DeepSeek API with stream=True, yielding content tokens as they arrive.
+        If `messages` is provided it is used directly, enabling multi-turn conversation history.
+        """
+        if messages is None:
+            messages = [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ]
+        params = {
+            "model": self.default_model,
+            "messages": messages,
+            "temperature": kwargs.get("temperature", 0.3),
+            "max_tokens": kwargs.get("max_tokens", 4000),
+            "stream": True
+        }
+
+        response = self.client.chat.completions.create(**params)
+        for chunk in response:
+            delta = chunk.choices[0].delta.content
+            if delta:
+                yield delta
 
     def get_model_info(self) -> Dict[str, Any]:
         """

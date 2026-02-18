@@ -4,7 +4,7 @@ Defines the interface standard that all LLM implementations must follow
 """
 
 from abc import ABC, abstractmethod
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, Generator
 
 
 class BaseLLM(ABC):
@@ -45,6 +45,15 @@ class BaseLLM(ABC):
             Default model name
         """
         pass
+
+    def invoke_stream(self, system_prompt: str, user_prompt: str, messages: Optional[list] = None, **kwargs) -> Generator[str, None, None]:
+        """
+        Stream response token by token.
+        If `messages` is provided it is used directly (enables multi-turn history).
+        Default implementation falls back to invoke() and yields the full response as one chunk.
+        Override in subclasses to support real token-level streaming.
+        """
+        yield self.invoke(system_prompt, user_prompt, **kwargs)
 
     def validate_response(self, response: str) -> str:
         """

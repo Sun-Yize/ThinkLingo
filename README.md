@@ -1,202 +1,210 @@
-# Translation-Based LLM Framework
+# Translation-Based LLM Chat Application
 
-A Python framework that standardizes LLM reasoning quality across languages by forcing core interactions to happen in English, regardless of the user's input language.
+A web application that standardizes LLM response quality across languages by processing all requests in English, regardless of the user's input language. Features a React frontend with real-time visualization of the translation pipeline.
 
-## Architecture
+## Architecture Overview
 
-The framework implements a simple but effective workflow:
+This application implements a **4-step translation workflow**:
 
-1. **User Input**: Accept input in any language
-2. **Pre-Translation**: Convert to English (if needed)
+1. **User Input**: Accept input in any supported language
+2. **Pre-Translation**: Convert to English (if source language ≠ English)
 3. **Core Inference**: Process in English for consistent quality
-4. **Post-Translation**: Convert response back to user's language (if needed)
+4. **Post-Translation**: Convert response to target language (if target language ≠ English)
 
-## Key Components
+## Project Structure
 
-- **BaseLLM**: Abstract interface for LLM implementations
-- **DeepSeekLLM**: DeepSeek API implementation (default)
-- **OpenAILLM**: OpenAI API implementation
-- **TranslatorAgent**: Handles language detection and translation
-- **QuestionerAgent**: Processes queries in English
-- **TranslationOrchestrator**: Manages the complete workflow
-- **LLMFactory**: Creates appropriate LLM instances based on configuration
-
-## Quick Start
-
-### 1. Installation
-
-```bash
-# Clone or download the framework
-cd translation_llm_framework
-
-# Install dependencies
-pip install -r requirements.txt
+```
+├── backend/                    # FastAPI backend server
+│   ├── api_server.py          # Main server with WebSocket streaming
+│   └── requirements.txt       # Backend dependencies
+├── frontend/                   # React TypeScript frontend
+│   ├── src/
+│   │   ├── components/        # React components
+│   │   │   ├── TranslationChat.tsx     # Main chat interface
+│   │   │   ├── ChatInput.tsx           # User input component
+│   │   │   ├── MessageDisplay.tsx      # Chat messages display
+│   │   │   └── ProcessVisualization.tsx # Real-time pipeline view
+│   │   ├── types/             # TypeScript type definitions
+│   │   └── index.tsx          # App entry point
+│   ├── package.json           # Frontend dependencies
+│   └── tailwind.config.js     # Styling configuration
+├── src/                       # Python backend logic
+│   ├── orchestrator/          # Main workflow management
+│   ├── agents/               # Translation and inference agents
+│   ├── llms/                 # LLM provider implementations
+│   └── utils/                # Configuration and utilities
+└── main.py                   # CLI testing interface
 ```
 
-### 2. Configuration
+## Features
 
-Copy the environment template and add your API keys:
+### Frontend Features
+- **Split-Screen Layout**:
+  - Left panel shows user conversation in selected languages
+  - Right panel visualizes the internal translation pipeline
+- **Real-Time Streaming**: WebSocket-based streaming with typewriter effects
+- **Language Selection**: Support for English, Chinese, Japanese, and Korean
+- **Response Types**: General, creative, analytical, educational, and technical
+- **Translation Methods**: Choose between Google Translate (fast) or LLM translation (higher quality)
 
+### Backend Features
+- **Dual-LLM Architecture**: Separate models for main processing (DeepSeek) and translation (GPT-3.5)
+- **WebSocket Streaming**: Real-time communication with frontend
+- **REST API**: Traditional endpoints for non-streaming requests
+- **Configurable Providers**: Support for multiple LLM providers
+
+## Installation & Setup
+
+### Prerequisites
+- Python 3.8+
+- Node.js 16+
+- API keys for DeepSeek and OpenAI
+
+### Backend Setup
+
+1. Install Python dependencies:
+```bash
+pip install -r requirements.txt
+pip install -r backend/requirements.txt
+```
+
+2. Configure API keys:
 ```bash
 cp .env.template .env
+# Edit .env file to add your API keys
 ```
 
-Edit the `.env` file and add your API keys:
-
+3. Start the backend server:
 ```bash
-# DeepSeek API Key (Default provider)
-DEEPSEEK_API_KEY=your_deepseek_api_key_here
-
-# OpenAI API Key (Alternative provider)
-OPENAI_API_KEY=your_openai_api_key_here
+cd backend
+python api_server.py
 ```
 
-**Note**: DeepSeek is set as the default provider. You can change this in the `.env` file by setting `DEFAULT_LLM_PROVIDER=openai` if you prefer to use OpenAI.
+The API server will run on `http://localhost:8000`
 
-### 3. Run the Demo
+### Frontend Setup
 
+1. Install Node.js dependencies:
 ```bash
-python main.py
+cd frontend
+npm install
 ```
 
-The demo provides several test modes:
-- Basic workflow testing with multiple languages
-- Question answering functionality
-- Different response types (general, creative, analytical, etc.)
-- Interactive mode for manual testing
-
-## Usage Example
-
-```python
-from src.orchestrator.translation_orchestrator import TranslationOrchestrator
-from src.utils.config import Config
-from src.utils.llm_factory import LLMFactory
-
-# Initialize
-config = Config.from_env()
-llm_client = LLMFactory.create_llm(config)  # Uses DeepSeek by default
-orchestrator = TranslationOrchestrator(llm_client)
-
-# Process a query in any language
-results = orchestrator.process_query(
-    user_input="你好，今天过得怎么样？",  # Chinese input
-    response_type="general"
-)
-
-print(results["final_response"])  # Response in Chinese
+2. Start the development server:
+```bash
+npm start
 ```
 
-### Switching LLM Providers
+The frontend will run on `http://localhost:3000`
 
-```python
-# Option 1: Change default provider in .env file
-DEFAULT_LLM_PROVIDER=openai
+## Usage
 
-# Option 2: Create specific LLM instance
-from src.utils.llm_factory import LLMFactory
+### Web Interface
 
-openai_llm = LLMFactory.create_specific_llm("openai", "your-openai-key")
-deepseek_llm = LLMFactory.create_specific_llm("deepseek", "your-deepseek-key")
-```
+1. Open `http://localhost:3000` in your browser
+2. Select your source and target languages
+3. Choose response type and translation method
+4. Send a message and watch the real-time translation pipeline in action
 
-## Workflow Details
+### API Endpoints
 
-### For Non-English Input:
-```
-Chinese Input → English Translation → English Processing → Chinese Response
-```
-
-### For English Input:
-```
-English Input → English Processing → English Response
-```
-
-### Workflow Results
-
-The orchestrator returns detailed workflow information:
-
-```python
-{
-    "original_input": "你好，今天过得怎么样？",
-    "detected_language": "Chinese",
-    "english_translation": "Hello, how are you today?",
-    "english_response": "I'm doing well, thank you for asking!",
-    "final_response": "我很好，谢谢你的询问！",
-    "is_direct_english": False
-}
-```
-
-## Response Types
-
-The framework supports different response types:
-
-- **general**: General purpose responses
-- **creative**: Creative and imaginative content
-- **analytical**: Structured analytical responses
-- **educational**: Clear explanations with examples
-- **technical**: Precise technical information
+- **GET** `/api/health` - Health check
+- **GET** `/api/languages` - Get supported languages
+- **GET** `/api/response-types` - Get available response types
+- **POST** `/api/chat` - Process message (non-streaming)
+- **WebSocket** `/ws/chat` - Real-time streaming chat
 
 ## Configuration
 
-You can customize the framework behavior:
-
-```python
-from src.utils.config import Config
-
-config = Config(
-    default_llm_provider="deepseek",  # or "openai"
-    deepseek_model="deepseek-chat",
-    openai_model="gpt-4o-mini",
-    default_response_type="general",
-    default_temperature=0.7,
-    max_tokens=4000
-)
-```
-
-Or via `.env` file:
-
+### Environment Variables (.env)
 ```bash
-DEFAULT_LLM_PROVIDER=deepseek
+# API Keys
+DEEPSEEK_API_KEY=your_deepseek_api_key_here
+OPENAI_API_KEY=your_openai_api_key_here
+
+# Provider Configuration
+DEFAULT_LLM_PROVIDER=deepseek           # Main processing provider
+TRANSLATION_LLM_PROVIDER=gpt35         # Translation provider
+
+# Model Configuration
 DEEPSEEK_MODEL=deepseek-chat
 OPENAI_MODEL=gpt-4o-mini
+GPT35_MODEL=gpt-3.5-turbo
+
+# Response Configuration
 DEFAULT_RESPONSE_TYPE=general
 DEFAULT_TEMPERATURE=0.7
 MAX_TOKENS=4000
 ```
 
-## Project Structure
+### Supported Languages
+- **English** (`english`)
+- **Chinese** (`chinese`)
+- **Japanese** (`japanese`)
+- **Korean** (`korean`)
 
+## Framework Recommendation
+
+**React with TypeScript** was chosen for the frontend because:
+
+1. **Real-time Data Handling**: Excellent WebSocket support and state management
+2. **Component Architecture**: Modular design perfect for split-screen layout
+3. **TypeScript Integration**: Type safety for complex data structures
+4. **Ecosystem**: Rich ecosystem with libraries for streaming, styling (Tailwind), and forms
+5. **Development Experience**: Hot reloading, debugging tools, and wide community support
+
+**FastAPI** was chosen for the backend because:
+
+1. **WebSocket Support**: Native WebSocket support for real-time streaming
+2. **Async/Await**: Perfect for handling LLM API calls and concurrent requests
+3. **Automatic Documentation**: OpenAPI/Swagger integration
+4. **Type Hints**: Python type hints work well with the existing codebase
+5. **Performance**: High performance for real-time applications
+
+## Development
+
+### Testing the Backend
+```bash
+# Test individual components
+python -c "from src.orchestrator.translation_orchestrator import TranslationOrchestrator; print('Import successful')"
+
+# Run the demo/test interface
+python main.py
 ```
-translation_llm_framework/
-├── src/
-│   ├── llms/                 # LLM implementations
-│   │   ├── base.py          # Base LLM interface
-│   │   ├── deepseek_llm.py  # DeepSeek implementation (default)
-│   │   └── openai_llm.py    # OpenAI implementation
-│   ├── agents/              # Specialized agents
-│   │   ├── translator_agent.py     # Translation logic
-│   │   └── questioner_agent.py     # Question processing
-│   ├── orchestrator/        # Workflow management
-│   │   └── translation_orchestrator.py
-│   └── utils/               # Utilities
-│       ├── config.py        # Configuration management
-│       └── llm_factory.py   # LLM factory for provider selection
-├── .env.template           # Environment variables template
-├── .env                    # Your API keys (add your keys here)
-├── .gitignore             # Git ignore file
-├── main.py                # Demo and testing script
-├── requirements.txt       # Dependencies
-└── README.md             # This file
+
+### Building for Production
+```bash
+# Build frontend
+cd frontend
+npm run build
+
+# The built files will be in frontend/build/
+# Serve these static files with your preferred web server
 ```
 
-## Future Enhancements
+## API Integration
 
-- Web-based frontend with split-screen visualization
-- Support for additional LLM providers
-- Caching for improved performance
-- Batch processing capabilities
-- Custom translation models
+The frontend communicates with the backend through:
 
-## License
+1. **WebSocket Connection**: Real-time streaming of translation steps and responses
+2. **REST API**: Configuration data (languages, response types) and health checks
+3. **JSON Messages**: Structured communication protocol for chat requests and responses
 
-This project is open source. Feel free to use and modify as needed.
+### WebSocket Message Format
+```typescript
+{
+  type: 'translation_start' | 'translation_complete' | 'processing_start' | 'processing_chunk' | 'processing_complete' | 'final_translation' | 'error',
+  step: 'input_translation' | 'inference' | 'output_translation',
+  content: string,
+  metadata?: {
+    from?: string,
+    to?: string,
+    original?: string,
+    translated?: string,
+    chunk_index?: number,
+    // ... additional metadata
+  }
+}
+```
+
+This architecture provides a robust, scalable foundation for a multilingual LLM chat application with real-time visualization of the translation pipeline.

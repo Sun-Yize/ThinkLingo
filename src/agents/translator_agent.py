@@ -3,8 +3,8 @@ Translator Agent for language conversion
 Handles translation between any supported language pairs
 """
 
-import os
-from typing import Optional
+import asyncio
+from typing import Optional, Generator
 from ..llms.base import BaseLLM
 from ..utils.language_config import LanguageConfig
 
@@ -24,20 +24,37 @@ class TranslatorAgent:
         self.language_config = LanguageConfig()
         self.config = config
 
-        # Initialize Google Translator if API key is available
         self.google_translator = None
-        if config and hasattr(config, 'google_translate_api_key') and config.google_translate_api_key:
-            try:
-                from google.cloud import translate_v2 as translate
-                # Set the API key in the environment for google-cloud-translate
-                os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = config.google_translate_api_key
-                self.google_translator = translate.Client()
-            except ImportError:
-                print("Warning: google-cloud-translate package not installed. Install with: pip install google-cloud-translate")
-                self.google_translator = None
-            except Exception as e:
-                print(f"Warning: Failed to initialize Google Translate client: {str(e)}")
-                self.google_translator = None
+        try:
+            from googletrans import Translator
+            import nest_asyncio
+            
+            nest_asyncio.apply()
+            
+            self.google_translator = Translator()
+        except ImportError as e:
+            print(f"Warning: Required package not installed: {str(e)}")
+            print("Install with: pip install googletrans nest-asyncio")
+            self.google_translator = None
+        except Exception as e:
+            print(f"Warning: Failed to initialize Google Translate client: {str(e)}")
+            self.google_translator = None
+    
+    def google_translate_sync(self, text, src='auto', dest='en'):
+        """Synchronous wrapper for async Google Translate"""
+        try:
+            return asyncio.run(self.google_translator.translate(text, src=src, dest=dest))
+        except RuntimeError as e:
+            if "Event loop is closed" in str(e) or "cannot be called from a running event loop" in str(e):
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                try:
+                    result = loop.run_until_complete(self.google_translator.translate(text, src=src, dest=dest))
+                    return result
+                finally:
+                    loop.close()
+            else:
+                raise
 
     def translate(self, text: str, source_language: str, target_language: str, method: str = "llm") -> str:
         """
@@ -91,7 +108,7 @@ class TranslatorAgent:
         # Map our language keys to Google Translate language codes
         lang_mapping = {
             'english': 'en',
-            'chinese': 'zh',
+            'chinese': 'zh-cn',
             'japanese': 'ja',
             'korean': 'ko'
         }
@@ -100,8 +117,8 @@ class TranslatorAgent:
         target_code = lang_mapping.get(target_language, target_language)
 
         try:
-            result = self.google_translator.translate(text, source_language=source_code, target_language=target_code)
-            return result['translatedText']
+            result = self.google_translate_sync(text, src=source_code, dest=target_code)
+            return result.text
         except Exception as e:
             print(f"Google Translate failed: {str(e)}, falling back to LLM translation")
             return self._translate_with_llm(text, source_language, target_language)
@@ -138,6 +155,37 @@ Keep the meaning and tone as accurate as possible. Only return the translated te
         except Exception as e:
             print(f"LLM translation from {source_display} to {target_display} failed: {str(e)}")
             return text  # Return original text as fallback
+
+    def stream_translate(self, text: str, source_language: str, target_language: str) -> Generator[str, None, None]:
+        """
+        LLM-based streaming translation. Only called when method='llm'.
+
+        Args:
+            text: Text to translate
+            source_language: Source language key
+            target_language: Target language key
+
+        Yields:
+            Translation tokens as they are generated
+        """
+        source_display = self.language_config.get_language_display_name(source_language)
+        target_display = self.language_config.get_language_display_name(target_language)
+
+        system_prompt = (
+            f"You are a professional translator. Translate the following {source_display} text to {target_display}. "
+            "Keep the meaning and tone as accurate as possible. Only return the translated text, no explanations or additional commentary."
+        )
+        user_prompt = f"Translate this {source_display} text to {target_display}: {text}"
+
+        try:
+            yield from self.llm_client.invoke_stream(
+                system_prompt=system_prompt,
+                user_prompt=user_prompt,
+                temperature=0.1,
+            )
+        except Exception as e:
+            print(f"LLM streaming translation from {source_display} to {target_display} failed: {str(e)}")
+            yield text  # Return original text as fallback
 
     def get_supported_languages(self) -> list:
         """

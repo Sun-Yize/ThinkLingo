@@ -19,7 +19,6 @@ class Config:
         openai_api_key: Optional[str] = None,
         openai_model: str = "gpt-4o-mini",
         gpt35_model: str = "gpt-3.5-turbo",
-        google_translate_api_key: Optional[str] = None,
         default_response_type: str = "general",
         default_temperature: float = 0.7,
         max_tokens: int = 4000
@@ -35,7 +34,6 @@ class Config:
             openai_api_key: OpenAI API key
             openai_model: OpenAI model to use
             gpt35_model: GPT-3.5 model to use
-            google_translate_api_key: Google Translate API key
             default_response_type: Default response type
             default_temperature: Default temperature for LLM calls
             max_tokens: Maximum tokens for responses
@@ -50,7 +48,6 @@ class Config:
         # API Configuration
         self.deepseek_api_key = deepseek_api_key or os.getenv("DEEPSEEK_API_KEY")
         self.openai_api_key = openai_api_key or os.getenv("OPENAI_API_KEY")
-        self.google_translate_api_key = google_translate_api_key or os.getenv("GOOGLE_TRANSLATE_API_KEY")
 
         # Model Configuration
         self.deepseek_model = deepseek_model or os.getenv("DEEPSEEK_MODEL", "deepseek-chat")
@@ -211,7 +208,6 @@ class Config:
             openai_api_key=os.getenv("OPENAI_API_KEY"),
             openai_model=os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
             gpt35_model=os.getenv("GPT35_MODEL", "gpt-3.5-turbo"),
-            google_translate_api_key=os.getenv("GOOGLE_TRANSLATE_API_KEY"),
             default_response_type=os.getenv("DEFAULT_RESPONSE_TYPE", "general"),
             default_temperature=float(os.getenv("DEFAULT_TEMPERATURE", "0.7")),
             max_tokens=int(os.getenv("MAX_TOKENS", "4000"))

@@ -128,7 +128,7 @@ class TranslationOrchestrator:
         target_language: str,
         processing_language: str = "english",
         response_type: str = "general",
-        translation_method: str = "llm",
+        translation_method: str = "google",
         context: Optional[str] = None,
         **kwargs
     ) -> Dict[str, Any]:

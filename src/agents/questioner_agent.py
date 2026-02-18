@@ -3,7 +3,7 @@ Questioner Agent for core English inference
 Handles the main reasoning and response generation in English
 """
 
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, Generator
 from ..llms.base import BaseLLM
 
 
@@ -102,6 +102,39 @@ If you're unsure about something, acknowledge the uncertainty rather than guessi
         except Exception as e:
             print(f"Response generation failed: {str(e)}")
             return "I apologize, but I encountered an error while generating a response."
+
+    def stream_generate_response(
+        self,
+        prompt: str,
+        response_type: str = "general",
+        conversation_history: Optional[list] = None,
+        **kwargs
+    ) -> Generator[str, None, None]:
+        """
+        Stream response token by token for a given prompt and response type.
+
+        Args:
+            conversation_history: List of prior turns as {"role": "user"|"assistant", "content": str}.
+                                  Contents should be in the processing language (English).
+
+        Returns:
+            Generator yielding text chunks as they arrive from the LLM.
+        """
+        system_prompt = self._get_system_prompt_for_type(response_type)
+
+        # Build full messages array: system + history + current user message
+        messages = [{"role": "system", "content": system_prompt}]
+        if conversation_history:
+            messages.extend(conversation_history)
+        messages.append({"role": "user", "content": prompt})
+
+        return self.llm_client.invoke_stream(
+            system_prompt=system_prompt,
+            user_prompt=prompt,
+            messages=messages,
+            temperature=kwargs.get("temperature", self._get_default_temperature(response_type)),
+            max_tokens=kwargs.get("max_tokens", 4000)
+        )
 
     def _get_system_prompt_for_type(self, response_type: str) -> str:
         """Get system prompt based on response type"""
