@@ -4,10 +4,14 @@ Manages the complete workflow with user-specified language pairs
 """
 
 from typing import Optional, Dict, Any
+import logging
 from ..llms.base import BaseLLM
 from ..agents.translator_agent import TranslatorAgent
 from ..agents.questioner_agent import QuestionerAgent
 from ..utils.language_config import LanguageConfig
+
+
+logger = logging.getLogger(__name__)
 
 
 class TranslationOrchestrator:
@@ -227,7 +231,7 @@ class TranslationOrchestrator:
             return workflow_results
 
         except Exception as e:
-            print(f"Error in translation workflow: {str(e)}")
+            logger.error(f"Error in translation workflow: {str(e)}")
             # Return error workflow
             workflow_results["error"] = str(e)
             workflow_results["final_response"] = self._get_error_message(target_language)

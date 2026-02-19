@@ -4,7 +4,11 @@ Handles the main reasoning and response generation in English
 """
 
 from typing import Optional, Dict, Any, Generator
+import logging
 from ..llms.base import BaseLLM
+
+
+logger = logging.getLogger(__name__)
 
 
 class QuestionerAgent:
@@ -44,7 +48,7 @@ class QuestionerAgent:
             )
             return response.strip()
         except Exception as e:
-            print(f"Question processing failed: {str(e)}")
+            logger.error(f"Question processing failed: {str(e)}")
             return "I apologize, but I encountered an error while processing your question."
 
     def _build_system_prompt(self, context: Optional[str] = None) -> str:
@@ -100,7 +104,7 @@ If you're unsure about something, acknowledge the uncertainty rather than guessi
             )
             return response.strip()
         except Exception as e:
-            print(f"Response generation failed: {str(e)}")
+            logger.error(f"Response generation failed: {str(e)}")
             return "I apologize, but I encountered an error while generating a response."
 
     def stream_generate_response(

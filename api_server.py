@@ -3,15 +3,25 @@ FastAPI server for the Translation-Based LLM Frontend
 Provides WebSocket streaming and REST API endpoints
 """
 
+import logging
+import os
+import sys
+import asyncio
+import json
+from concurrent.futures import ThreadPoolExecutor
+from contextlib import asynccontextmanager
+from typing import Optional, Dict, Any
+
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import Optional, Dict, Any
-from contextlib import asynccontextmanager
-import asyncio
-import json
-import sys
-import os
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+)
+logger = logging.getLogger(__name__)
 
 # Add src to Python path for imports
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'src'))
@@ -19,6 +29,9 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'src'))
 from src.orchestrator.translation_orchestrator import TranslationOrchestrator
 from src.utils.config import Config
 from src.utils.llm_factory import LLMFactory
+
+# Bounded thread pool — avoids unbounded resource consumption under load
+_executor = ThreadPoolExecutor(max_workers=int(os.getenv("MAX_WORKERS", "20")))
 
 # Global orchestrator instance
 orchestrator = None
@@ -32,18 +45,21 @@ async def lifespan(app: FastAPI):
         llm_client = LLMFactory.create_llm(config)
         translation_llm_client = LLMFactory.create_translation_llm(config)
         orchestrator = TranslationOrchestrator(llm_client, translation_llm_client, config)
-        print("Translation orchestrator initialized successfully")
+        logger.info("Translation orchestrator initialized successfully")
         yield
     except Exception as e:
-        print(f"Failed to initialize orchestrator: {e}")
+        logger.error(f"Failed to initialize orchestrator: {e}")
         raise
 
 app = FastAPI(title="Translation-Based LLM API", version="1.0.0", lifespan=lifespan)
 
-# Configure CORS for frontend integration
+# Configure CORS — origins from environment variable (comma-separated)
+_cors_origins_raw = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://localhost:5173")
+_cors_origins = [o.strip() for o in _cors_origins_raw.split(",") if o.strip()]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:5173"],  # React dev servers
+    allow_origins=_cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -59,7 +75,11 @@ class StreamingMessage(BaseModel):
 @app.get("/api/health")
 async def health_check():
     """Health check endpoint"""
-    return {"status": "healthy", "message": "Translation LLM API is running"}
+    return {
+        "status": "healthy",
+        "message": "Translation LLM API is running",
+        "orchestrator_ready": orchestrator is not None,
+    }
 
 @app.get("/api/languages")
 async def get_supported_languages():
@@ -96,7 +116,7 @@ class ConnectionManager:
         try:
             await websocket.send_text(message.model_dump_json())
         except Exception as e:
-            print(f"Failed to send WebSocket message: {e}")
+            logger.warning(f"Failed to send WebSocket message: {e}")
 
 manager = ConnectionManager()
 
@@ -109,6 +129,16 @@ async def websocket_chat_endpoint(websocket: WebSocket):
         while True:
             # Receive message from client
             data = await websocket.receive_text()
+
+            # Reject oversized messages (100 KB limit)
+            if len(data) > 100 * 1024:
+                await manager.send_message(websocket, StreamingMessage(
+                    type="error",
+                    step="validation",
+                    content="Message too large (max 100 KB)"
+                ))
+                continue
+
             request_data = json.loads(data)
 
             if not orchestrator:
@@ -124,9 +154,9 @@ async def websocket_chat_endpoint(websocket: WebSocket):
 
     except WebSocketDisconnect:
         manager.disconnect(websocket)
-        print("WebSocket client disconnected")
+        logger.info("WebSocket client disconnected")
     except Exception as e:
-        print(f"WebSocket error: {e}")
+        logger.error(f"WebSocket error: {e}")
         await manager.send_message(websocket, StreamingMessage(
             type="error",
             step="processing",
@@ -152,7 +182,7 @@ async def _stream_translation(translator, text: str, source_language: str, targe
         finally:
             loop.call_soon_threadsafe(queue.put_nowait, None)  # sentinel
 
-    producer_future = loop.run_in_executor(None, _producer)
+    producer_future = loop.run_in_executor(_executor, _producer)
 
     while True:
         item = await queue.get()
@@ -188,8 +218,8 @@ async def _stream_inference(questioner, prompt: str, response_type: str, convers
         finally:
             loop.call_soon_threadsafe(queue.put_nowait, None)  # sentinel
 
-    # Start producer in thread pool without awaiting it yet
-    producer_future = loop.run_in_executor(None, _producer)
+    # Start producer in bounded thread pool without awaiting it yet
+    producer_future = loop.run_in_executor(_executor, _producer)
 
     # Consume from queue while producer runs concurrently
     while True:
@@ -213,6 +243,12 @@ async def process_streaming_chat(websocket: WebSocket, request_data: Dict[str, A
     response_type = request_data.get("response_type", "general")
     translation_method = request_data.get("translation_method", "google")
     conversation_history = request_data.get("conversation_history", [])
+
+    # Truncate conversation history to avoid unbounded memory / token growth
+    max_turns = int(os.getenv("MAX_HISTORY_TURNS", "20"))
+    max_messages = max_turns * 2
+    if len(conversation_history) > max_messages:
+        conversation_history = conversation_history[-max_messages:]
 
     try:
         # Step 1: Input translation (if needed)

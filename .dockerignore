@@ -1,0 +1,15 @@
+.env
+.env.*
+!.env.template
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+.git/
+.gitignore
+frontend/
+nginx/ssl/
+*.md
+.vscode/

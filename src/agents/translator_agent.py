@@ -4,6 +4,7 @@ Handles translation between any supported language pairs
 """
 
 import asyncio
+import logging
 import re
 from typing import Optional, Generator
 from ..llms.base import BaseLLM
@@ -11,6 +12,8 @@ from ..utils.language_config import LanguageConfig
 
 # Matches fenced code blocks (```...```) and inline code (`...`)
 _CODE_PATTERN = re.compile(r'(```[\s\S]*?```|`[^`\n]+`)')
+
+logger = logging.getLogger(__name__)
 
 
 class TranslatorAgent:
@@ -33,9 +36,9 @@ class TranslatorAgent:
             import googletrans  # noqa: F401 — just verify it's installed
             self.google_available = True
         except ImportError:
-            print("Warning: googletrans not installed. Install with: pip install googletrans")
+            logger.warning("Warning: googletrans not installed. Install with: pip install googletrans")
         except Exception as e:
-            print(f"Warning: Failed to import googletrans: {e}")
+            logger.warning(f"Warning: Failed to import googletrans: {e}")
 
     # ── Code-block protection helpers ────────────────────────────────
 
@@ -109,7 +112,7 @@ class TranslatorAgent:
         created in — avoiding cross-loop issues when called from a thread pool.
         """
         if not self.google_available:
-            print("Google Translate not available, falling back to LLM translation")
+            logger.warning("Google Translate not available, falling back to LLM translation")
             return self._translate_with_llm(text, source_language, target_language)
 
         protected_text, blocks = self._extract_code_blocks(text)
@@ -138,7 +141,7 @@ class TranslatorAgent:
                 loop.close()
             return self._restore_code_blocks(translated, blocks)
         except Exception as e:
-            print(f"Google Translate failed: {e}, falling back to LLM translation")
+            logger.warning(f"Google Translate failed: {e}, falling back to LLM translation")
             return self._translate_with_llm(text, source_language, target_language)
 
     @staticmethod
@@ -170,7 +173,7 @@ class TranslatorAgent:
             )
             return translated_text.strip()
         except Exception as e:
-            print(f"LLM translation from {source_display} to {target_display} failed: {str(e)}")
+            logger.error(f"LLM translation from {source_display} to {target_display} failed: {str(e)}")
             return text
 
     def stream_translate(self, text: str, source_language: str, target_language: str) -> Generator[str, None, None]:
@@ -193,7 +196,7 @@ class TranslatorAgent:
                 temperature=0.1,
             )
         except Exception as e:
-            print(f"LLM streaming translation from {source_display} to {target_display} failed: {str(e)}")
+            logger.error(f"LLM streaming translation from {source_display} to {target_display} failed: {str(e)}")
             yield text
 
     def get_supported_languages(self) -> list:

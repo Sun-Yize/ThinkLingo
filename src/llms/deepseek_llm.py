@@ -4,9 +4,13 @@ Uses DeepSeek API for text generation
 """
 
 import os
+import logging
 from typing import Optional, Dict, Any, Generator
 from openai import OpenAI
 from .base import BaseLLM
+
+
+logger = logging.getLogger(__name__)
 
 
 class DeepSeekLLM(BaseLLM):
@@ -30,7 +34,8 @@ class DeepSeekLLM(BaseLLM):
         # Initialize DeepSeek client (using OpenAI-compatible interface)
         self.client = OpenAI(
             api_key=self.api_key,
-            base_url="https://api.deepseek.com"
+            base_url="https://api.deepseek.com",
+            timeout=60.0,
         )
         self.default_model = model_name or self.get_default_model()
 
@@ -76,7 +81,7 @@ class DeepSeekLLM(BaseLLM):
                 return ""
 
         except Exception as e:
-            print(f"DeepSeek API call error: {str(e)}")
+            logger.error(f"DeepSeek API call error: {str(e)}")
             raise e
 
     def invoke_stream(self, system_prompt: str, user_prompt: str, messages: Optional[list] = None, **kwargs) -> Generator[str, None, None]:

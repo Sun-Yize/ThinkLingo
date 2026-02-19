@@ -4,9 +4,13 @@ Uses OpenAI GPT-3.5-turbo which is faster and more cost-effective for translatio
 """
 
 import os
+import logging
 from typing import Optional, Dict, Any
 from openai import OpenAI
 from .base import BaseLLM
+
+
+logger = logging.getLogger(__name__)
 
 
 class GPT35LLM(BaseLLM):
@@ -28,7 +32,7 @@ class GPT35LLM(BaseLLM):
         super().__init__(api_key, model_name)
 
         # Initialize OpenAI client
-        self.client = OpenAI(api_key=self.api_key)
+        self.client = OpenAI(api_key=self.api_key, timeout=60.0)
         self.default_model = model_name or self.get_default_model()
 
     def get_default_model(self) -> str:
@@ -73,7 +77,7 @@ class GPT35LLM(BaseLLM):
                 return ""
 
         except Exception as e:
-            print(f"GPT-3.5 API call error: {str(e)}")
+            logger.error(f"GPT-3.5 API call error: {str(e)}")
             raise e
 
     def get_model_info(self) -> Dict[str, Any]:
