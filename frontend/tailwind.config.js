@@ -5,29 +5,28 @@ module.exports = {
   ],
   theme: {
     extend: {
-      colors: {
-        primary: {
-          50: '#f0f9ff',
-          500: '#3b82f6',
-          600: '#2563eb',
-          700: '#1d4ed8',
-        },
-        secondary: {
-          50: '#f8fafc',
-          100: '#f1f5f9',
-          200: '#e2e8f0',
-          300: '#cbd5e1',
-          400: '#94a3b8',
-          500: '#64748b',
-          600: '#475569',
-          700: '#334155',
-          800: '#1e293b',
-          900: '#0f172a',
-        }
-      },
       fontFamily: {
-        mono: ['ui-monospace', 'SFMono-Regular', 'Monaco', 'Consolas', 'Liberation Mono', 'Courier New', 'monospace'],
-      }
+        sans: ['"DM Sans"', 'Inter', 'system-ui', 'sans-serif'],
+        mono: ['ui-monospace', 'SFMono-Regular', 'Monaco', 'Consolas', 'monospace'],
+      },
+      colors: {
+        void: {
+          50:  '#1E1E30',
+          100: '#18182A',
+          200: '#141422',
+          300: '#10101C',
+          400: '#0D0D18',
+          500: '#0B0B14',
+          900: '#06060E',
+        },
+      },
+      boxShadow: {
+        'glow-violet': '0 0 24px rgba(124,58,237,0.30)',
+        'glow-cyan':   '0 0 24px rgba(6,182,212,0.22)',
+        'glass':       '0 8px 32px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.06)',
+        'modal':       '0 24px 64px rgba(0,0,0,0.65), 0 8px 24px rgba(0,0,0,0.35)',
+        'input':       '0 2px 12px rgba(0,0,0,0.35)',
+      },
     },
   },
   plugins: [
