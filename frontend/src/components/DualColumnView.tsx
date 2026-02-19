@@ -18,10 +18,22 @@ const langCode: Record<string, string> = {
 };
 
 const DualColumnView: React.FC<DualColumnViewProps> = ({ turns, settings, languages }) => {
-  const bottomRef = useRef<HTMLDivElement>(null);
+  const bottomRef        = useRef<HTMLDivElement>(null);
+  const scrollRef        = useRef<HTMLDivElement>(null);
+  const userScrolledUpRef = useRef(false);
+
+  // Detect whether the user has manually scrolled away from the bottom.
+  const handleScroll = () => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    userScrolledUpRef.current = distanceFromBottom > 20;
+  };
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (!userScrolledUpRef.current) {
+      bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
   }, [turns]);
 
   const t = getT(settings.sourceLanguage);
@@ -114,7 +126,7 @@ const DualColumnView: React.FC<DualColumnViewProps> = ({ turns, settings, langua
       </div>
 
       {/* ── Turn list ─────────────────────────────────────────────── */}
-      <div className="flex-1 overflow-y-auto">
+      <div ref={scrollRef} onScroll={handleScroll} className="flex-1 overflow-y-auto">
         {turns.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full gap-4 select-none">
             <div className="w-12 h-12 rounded-2xl bg-white/[0.03] border border-white/[0.07] flex items-center justify-center">

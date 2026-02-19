@@ -13,10 +13,10 @@ const NATIVE_NAMES: Record<string, string> = {
 };
 
 const DEFAULT_SETTINGS: ChatSettings = {
-  sourceLanguage:     'english',
+  sourceLanguage:     'chinese',
   processingLanguage: 'english',
   responseType:       'general',
-  translationMethod:  'google',
+  translationMethod:  'llm',
 };
 
 const TranslationChat: React.FC = () => {
@@ -238,7 +238,7 @@ const TranslationChat: React.FC = () => {
           </div>
           {/* Gradient title */}
           <span
-            className="text-[15px] font-bold tracking-[-0.3px]"
+            className="text-[18px] font-bold tracking-[-0.3px]"
             style={{ background: 'linear-gradient(90deg, #c4b5fd 0%, #f0f0ff 50%, #67e8f9 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}
           >
             {t.appTitle}

@@ -4,9 +4,13 @@ Handles translation between any supported language pairs
 """
 
 import asyncio
+import re
 from typing import Optional, Generator
 from ..llms.base import BaseLLM
 from ..utils.language_config import LanguageConfig
+
+# Matches fenced code blocks (```...```) and inline code (`...`)
+_CODE_PATTERN = re.compile(r'(```[\s\S]*?```|`[^`\n]+`)')
 
 
 class TranslatorAgent:
@@ -32,6 +36,36 @@ class TranslatorAgent:
             print("Warning: googletrans not installed. Install with: pip install googletrans")
         except Exception as e:
             print(f"Warning: Failed to import googletrans: {e}")
+
+    # ── Code-block protection helpers ────────────────────────────────
+
+    @staticmethod
+    def _extract_code_blocks(text: str):
+        """
+        Replace every code block / inline-code span with a unique placeholder.
+
+        Returns:
+            (protected_text, blocks)  where blocks maps placeholder → original.
+        """
+        blocks: dict[str, str] = {}
+        idx = [0]
+
+        def replacer(m: re.Match) -> str:
+            key = f'[[{idx[0]}]]'
+            blocks[key] = m.group(0)
+            idx[0] += 1
+            return key
+
+        return _CODE_PATTERN.sub(replacer, text), blocks
+
+    @staticmethod
+    def _restore_code_blocks(text: str, blocks: dict) -> str:
+        """Substitute placeholders back with their original code content."""
+        for key, value in blocks.items():
+            text = text.replace(key, value)
+        return text
+
+    # ─────────────────────────────────────────────────────────────────
 
     def translate(self, text: str, source_language: str, target_language: str, method: str = "llm") -> str:
         """
@@ -78,6 +112,8 @@ class TranslatorAgent:
             print("Google Translate not available, falling back to LLM translation")
             return self._translate_with_llm(text, source_language, target_language)
 
+        protected_text, blocks = self._extract_code_blocks(text)
+
         lang_mapping = {
             'english': 'en',
             'chinese': 'zh-cn',
@@ -92,71 +128,63 @@ class TranslatorAgent:
 
             async def _do() -> str:
                 async with Translator() as t:
-                    result = await t.translate(text, src=source_code, dest=target_code)
+                    result = await t.translate(protected_text, src=source_code, dest=target_code)
                     return result.text
 
             loop = asyncio.new_event_loop()
             try:
-                return loop.run_until_complete(_do())
+                translated = loop.run_until_complete(_do())
             finally:
                 loop.close()
+            return self._restore_code_blocks(translated, blocks)
         except Exception as e:
             print(f"Google Translate failed: {e}, falling back to LLM translation")
             return self._translate_with_llm(text, source_language, target_language)
 
+    @staticmethod
+    def _build_llm_translation_prompt(source_display: str, target_display: str) -> str:
+        return (
+            f"You are a professional translator. Translate the following {source_display} text to {target_display}. "
+            "Rules:\n"
+            "1. Only return the translated text — no explanations or extra commentary.\n"
+            "2. Keep the meaning and tone as accurate as possible.\n"
+            "3. Preserve ALL code blocks exactly as-is. "
+            "This includes fenced code blocks (content wrapped in triple backticks ``` ... ```) "
+            "and inline code (content wrapped in single backticks ` ... `). "
+            "Do NOT translate any content inside code blocks.\n"
+            "4. Preserve all markdown formatting (headings, bold, italic, lists, etc.)."
+        )
+
     def _translate_with_llm(self, text: str, source_language: str, target_language: str) -> str:
-        """
-        Translate using LLM
-
-        Args:
-            text: Text to translate
-            source_language: Source language key
-            target_language: Target language key
-
-        Returns:
-            Translated text
-        """
-        # Get display names for better prompt clarity
         source_display = self.language_config.get_language_display_name(source_language)
         target_display = self.language_config.get_language_display_name(target_language)
 
-        # Create translation prompt
-        system_prompt = f"""You are a professional translator. Translate the following {source_display} text to {target_display}.
-Keep the meaning and tone as accurate as possible. Only return the translated text, no explanations or additional commentary."""
-
-        user_prompt = f"Translate this {source_display} text to {target_display}: {text}"
+        system_prompt = self._build_llm_translation_prompt(source_display, target_display)
+        user_prompt = f"Translate this {source_display} text to {target_display}:\n\n{text}"
 
         try:
             translated_text = self.llm_client.invoke(
                 system_prompt=system_prompt,
                 user_prompt=user_prompt,
-                temperature=0.1  # Low temperature for consistent translations
+                temperature=0.1
             )
             return translated_text.strip()
         except Exception as e:
             print(f"LLM translation from {source_display} to {target_display} failed: {str(e)}")
-            return text  # Return original text as fallback
+            return text
 
     def stream_translate(self, text: str, source_language: str, target_language: str) -> Generator[str, None, None]:
         """
         LLM-based streaming translation. Only called when method='llm'.
 
-        Args:
-            text: Text to translate
-            source_language: Source language key
-            target_language: Target language key
-
         Yields:
-            Translation tokens as they are generated
+            Translation tokens as they are generated.
         """
         source_display = self.language_config.get_language_display_name(source_language)
         target_display = self.language_config.get_language_display_name(target_language)
 
-        system_prompt = (
-            f"You are a professional translator. Translate the following {source_display} text to {target_display}. "
-            "Keep the meaning and tone as accurate as possible. Only return the translated text, no explanations or additional commentary."
-        )
-        user_prompt = f"Translate this {source_display} text to {target_display}: {text}"
+        system_prompt = self._build_llm_translation_prompt(source_display, target_display)
+        user_prompt = f"Translate this {source_display} text to {target_display}:\n\n{text}"
 
         try:
             yield from self.llm_client.invoke_stream(
@@ -166,7 +194,7 @@ Keep the meaning and tone as accurate as possible. Only return the translated te
             )
         except Exception as e:
             print(f"LLM streaming translation from {source_display} to {target_display} failed: {str(e)}")
-            yield text  # Return original text as fallback
+            yield text
 
     def get_supported_languages(self) -> list:
         """
