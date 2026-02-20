@@ -1,6 +1,9 @@
 # API keys and sensitive configuration
 .env
 
+# Claude Code instructions (local only)
+CLAUDE.md
+
 # Python
 __pycache__/
 *.py[cod]

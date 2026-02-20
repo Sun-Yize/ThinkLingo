@@ -7,6 +7,8 @@ COPY package*.json ./
 RUN npm ci
 
 COPY . .
+ARG PUBLIC_URL=/
+ENV PUBLIC_URL=$PUBLIC_URL
 RUN npm run build
 
 # Stage 2: Serve with nginx

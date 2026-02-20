@@ -1,210 +1,199 @@
-# Translation-Based LLM Chat Application
+<div align="center">
 
-A web application that standardizes LLM response quality across languages by processing all requests in English, regardless of the user's input language. Features a React frontend with real-time visualization of the translation pipeline.
+# ThinkLingo
 
-## Architecture Overview
+**Multilingual LLM chat that always reasons in English — for consistent, high-quality answers across any language.**
 
-This application implements a **4-step translation workflow**:
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Python](https://img.shields.io/badge/Python-3.11+-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=white)](https://react.dev/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
+[![Docker](https://img.shields.io/badge/Docker-ready-2496ED?logo=docker&logoColor=white)](https://www.docker.com/)
 
-1. **User Input**: Accept input in any supported language
-2. **Pre-Translation**: Convert to English (if source language ≠ English)
-3. **Core Inference**: Process in English for consistent quality
-4. **Post-Translation**: Convert response to target language (if target language ≠ English)
+[Live Demo](https://www.yizesun.com/ThinkLingo) · [Report Bug](https://github.com/Sun-Yize/ThinkLingo/issues) · [Request Feature](https://github.com/Sun-Yize/ThinkLingo/issues)
 
-## Project Structure
+</div>
+
+---
+
+## Why ThinkLingo?
+
+LLMs perform best when reasoning in English. ThinkLingo exploits this by silently translating every message to English before inference, then translating the answer back — giving you English-grade reasoning quality in any language.
 
 ```
-├── backend/                    # FastAPI backend server
-│   ├── api_server.py          # Main server with WebSocket streaming
-│   └── requirements.txt       # Backend dependencies
-├── frontend/                   # React TypeScript frontend
-│   ├── src/
-│   │   ├── components/        # React components
-│   │   │   ├── TranslationChat.tsx     # Main chat interface
-│   │   │   ├── ChatInput.tsx           # User input component
-│   │   │   ├── MessageDisplay.tsx      # Chat messages display
-│   │   │   └── ProcessVisualization.tsx # Real-time pipeline view
-│   │   ├── types/             # TypeScript type definitions
-│   │   └── index.tsx          # App entry point
-│   ├── package.json           # Frontend dependencies
-│   └── tailwind.config.js     # Styling configuration
-├── src/                       # Python backend logic
-│   ├── orchestrator/          # Main workflow management
-│   ├── agents/               # Translation and inference agents
-│   ├── llms/                 # LLM provider implementations
-│   └── utils/                # Configuration and utilities
-└── main.py                   # CLI testing interface
+Your message (any language)
+  → [1] Translate to English
+  → [2] LLM reasons in English
+  → [3] Translate answer back
+  → Streamed to your screen in real time
 ```
 
-## Features
+The dual-column UI shows both sides — the English reasoning and your native language — so you always know what's happening.
 
-### Frontend Features
-- **Split-Screen Layout**:
-  - Left panel shows user conversation in selected languages
-  - Right panel visualizes the internal translation pipeline
-- **Real-Time Streaming**: WebSocket-based streaming with typewriter effects
-- **Language Selection**: Support for English, Chinese, Japanese, and Korean
-- **Response Types**: General, creative, analytical, educational, and technical
-- **Translation Methods**: Choose between Google Translate (fast) or LLM translation (higher quality)
+**Supports:** English · 中文 · 日本語 · 한국어
 
-### Backend Features
-- **Dual-LLM Architecture**: Separate models for main processing (DeepSeek) and translation (GPT-3.5)
-- **WebSocket Streaming**: Real-time communication with frontend
-- **REST API**: Traditional endpoints for non-streaming requests
-- **Configurable Providers**: Support for multiple LLM providers
+---
 
-## Installation & Setup
+## Quick Start
 
-### Prerequisites
-- Python 3.8+
-- Node.js 16+
-- API keys for DeepSeek and OpenAI
+### Option A — Command Line (development)
 
-### Backend Setup
+**Prerequisites:** Python 3.11+, Node.js 18+, a DeepSeek API key and/or OpenAI API key.
 
-1. Install Python dependencies:
+**1. Clone and configure**
+
+```bash
+git clone https://github.com/Sun-Yize/ThinkLingo.git
+cd ThinkLingo
+cp .env.template .env
+```
+
+Open `.env` and fill in your API keys (at minimum `DEEPSEEK_API_KEY` and `OPENAI_API_KEY`).
+
+**2. Start the backend**
+
 ```bash
 pip install -r requirements.txt
-pip install -r backend/requirements.txt
+uvicorn api_server:app --reload --port 8000
 ```
 
-2. Configure API keys:
-```bash
-cp .env.template .env
-# Edit .env file to add your API keys
-```
+**3. Start the frontend** (in a new terminal)
 
-3. Start the backend server:
-```bash
-cd backend
-python api_server.py
-```
-
-The API server will run on `http://localhost:8000`
-
-### Frontend Setup
-
-1. Install Node.js dependencies:
 ```bash
 cd frontend
 npm install
-```
-
-2. Start the development server:
-```bash
 npm start
 ```
 
-The frontend will run on `http://localhost:3000`
+Open **http://localhost:3000** — done.
 
-## Usage
+---
 
-### Web Interface
+### Option B — Docker (recommended)
 
-1. Open `http://localhost:3000` in your browser
-2. Select your source and target languages
-3. Choose response type and translation method
-4. Send a message and watch the real-time translation pipeline in action
+**Prerequisites:** [Docker](https://docs.docker.com/get-docker/) and [Docker Compose](https://docs.docker.com/compose/install/).
 
-### API Endpoints
+**1. Clone and configure**
 
-- **GET** `/api/health` - Health check
-- **GET** `/api/languages` - Get supported languages
-- **GET** `/api/response-types` - Get available response types
-- **POST** `/api/chat` - Process message (non-streaming)
-- **WebSocket** `/ws/chat` - Real-time streaming chat
+```bash
+git clone https://github.com/Sun-Yize/ThinkLingo.git
+cd ThinkLingo
+cp .env.template .env
+```
+
+Open `.env` and fill in your API keys.
+
+**2. Build and run**
+
+```bash
+docker-compose up -d
+```
+
+Open **http://localhost:3000** — done.
+
+**Useful commands**
+
+```bash
+docker-compose logs -f          # tail logs
+docker-compose down             # stop
+docker-compose up -d --build    # rebuild after code changes
+```
+
+---
 
 ## Configuration
 
-### Environment Variables (.env)
+All configuration lives in `.env` (copied from `.env.template`):
+
 ```bash
-# API Keys
-DEEPSEEK_API_KEY=your_deepseek_api_key_here
-OPENAI_API_KEY=your_openai_api_key_here
+# Required — at least one of these
+DEEPSEEK_API_KEY=your_deepseek_api_key
+OPENAI_API_KEY=your_openai_api_key
 
-# Provider Configuration
-DEFAULT_LLM_PROVIDER=deepseek           # Main processing provider
-TRANSLATION_LLM_PROVIDER=gpt35         # Translation provider
+# Which model handles reasoning (default: deepseek)
+DEFAULT_LLM_PROVIDER=deepseek        # deepseek | openai
 
-# Model Configuration
+# Which model handles translation — GPT-3.5 is fast and cheap (default: gpt35)
+TRANSLATION_LLM_PROVIDER=gpt35       # gpt35 | openai | deepseek
+
+# Model names
 DEEPSEEK_MODEL=deepseek-chat
 OPENAI_MODEL=gpt-4o-mini
 GPT35_MODEL=gpt-3.5-turbo
 
-# Response Configuration
-DEFAULT_RESPONSE_TYPE=general
+# Tuning
 DEFAULT_TEMPERATURE=0.7
 MAX_TOKENS=4000
+MAX_HISTORY_TURNS=20
+
+# CORS — must match the origin your browser connects from
+CORS_ORIGINS=http://localhost:3000
 ```
 
-### Supported Languages
-- **English** (`english`)
-- **Chinese** (`chinese`)
-- **Japanese** (`japanese`)
-- **Korean** (`korean`)
+**Cost tip:** The default dual-LLM setup (DeepSeek for reasoning, GPT-3.5 for translation) minimizes cost while maximizing quality. If you only have one API key, set both providers to the same value.
 
-## Framework Recommendation
+---
 
-**React with TypeScript** was chosen for the frontend because:
+## Tech Stack
 
-1. **Real-time Data Handling**: Excellent WebSocket support and state management
-2. **Component Architecture**: Modular design perfect for split-screen layout
-3. **TypeScript Integration**: Type safety for complex data structures
-4. **Ecosystem**: Rich ecosystem with libraries for streaming, styling (Tailwind), and forms
-5. **Development Experience**: Hot reloading, debugging tools, and wide community support
+| Layer | Technology |
+|---|---|
+| Frontend | React 18, TypeScript, Tailwind CSS |
+| Backend | FastAPI, Python 3.11, uvicorn |
+| Streaming | WebSocket (real-time token streaming) |
+| Reasoning LLM | DeepSeek `deepseek-chat` (default) |
+| Translation LLM | OpenAI `gpt-3.5-turbo` (default) |
+| Reverse Proxy | nginx |
+| Deployment | Docker + Docker Compose |
 
-**FastAPI** was chosen for the backend because:
+---
 
-1. **WebSocket Support**: Native WebSocket support for real-time streaming
-2. **Async/Await**: Perfect for handling LLM API calls and concurrent requests
-3. **Automatic Documentation**: OpenAPI/Swagger integration
-4. **Type Hints**: Python type hints work well with the existing codebase
-5. **Performance**: High performance for real-time applications
+## Project Structure
 
-## Development
-
-### Testing the Backend
-```bash
-# Test individual components
-python -c "from src.orchestrator.translation_orchestrator import TranslationOrchestrator; print('Import successful')"
-
-# Run the demo/test interface
-python main.py
+```
+ThinkLingo/
+├── api_server.py                        # FastAPI entry point + WebSocket
+├── src/
+│   ├── orchestrator/
+│   │   └── translation_orchestrator.py  # 4-step pipeline coordinator
+│   ├── agents/
+│   │   ├── translator_agent.py          # Language detection & translation
+│   │   └── questioner_agent.py          # English-language inference
+│   ├── llms/
+│   │   ├── base.py                      # Abstract LLM interface
+│   │   ├── deepseek_llm.py
+│   │   ├── openai_llm.py
+│   │   └── gpt35_llm.py
+│   └── utils/
+│       ├── config.py                    # Typed config loader
+│       ├── llm_factory.py               # LLM factory
+│       └── language_config.py           # Supported languages
+├── frontend/                            # React + TypeScript SPA
+├── nginx/
+│   ├── nginx-local.conf                 # Local Docker config
+│   └── nginx.conf                       # Production config (HTTPS)
+├── docker-compose.yml                   # Local deployment
+├── docker-compose.prod.yml              # Production overlay
+├── Dockerfile                           # Backend image
+└── .env.template                        # Config template
 ```
 
-### Building for Production
-```bash
-# Build frontend
-cd frontend
-npm run build
+---
 
-# The built files will be in frontend/build/
-# Serve these static files with your preferred web server
-```
+## Extending
 
-## API Integration
+- **Add an LLM provider** — extend `src/llms/base.py`, register in `src/utils/llm_factory.py`
+- **Add a language** — update `src/utils/language_config.py`, agent prompts, and `frontend/src/utils/i18n.ts`
+- **Add a response type** — update `src/utils/config.py` and `frontend/src/utils/i18n.ts`
 
-The frontend communicates with the backend through:
+---
 
-1. **WebSocket Connection**: Real-time streaming of translation steps and responses
-2. **REST API**: Configuration data (languages, response types) and health checks
-3. **JSON Messages**: Structured communication protocol for chat requests and responses
+## Self-Hosting on a Server
 
-### WebSocket Message Format
-```typescript
-{
-  type: 'translation_start' | 'translation_complete' | 'processing_start' | 'processing_chunk' | 'processing_complete' | 'final_translation' | 'error',
-  step: 'input_translation' | 'inference' | 'output_translation',
-  content: string,
-  metadata?: {
-    from?: string,
-    to?: string,
-    original?: string,
-    translated?: string,
-    chunk_index?: number,
-    // ... additional metadata
-  }
-}
-```
+See **[DEPLOY.md](DEPLOY.md)** for the full guide on deploying ThinkLingo to your own server with HTTPS.
 
-This architecture provides a robust, scalable foundation for a multilingual LLM chat application with real-time visualization of the translation pipeline.
+---
+
+## License
+
+[MIT](LICENSE)
