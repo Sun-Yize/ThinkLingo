@@ -80,13 +80,14 @@ const InputBar: React.FC<InputBarProps> = ({ onSend, disabled, sourceLanguage })
 
       {/* Gradient border wrapper — 1 px padding acts as the border */}
       <div
-        className="p-[1px] rounded-3xl transition-all duration-300"
+        className="p-[1px] transition-all duration-300"
         style={{
+          borderRadius: '24px',
           background: disabled
             ? 'rgba(255,255,255,0.05)'
             : isFocused
             ? 'linear-gradient(135deg, rgba(139,92,246,0.75) 0%, rgba(167,139,250,0.30) 45%, rgba(34,211,238,0.60) 100%)'
-            : 'linear-gradient(135deg, rgba(139,92,246,0.25) 0%, rgba(255,255,255,0.07) 50%, rgba(6,182,212,0.20) 100%)',
+            : 'linear-gradient(135deg, rgba(139,92,246,0.25) 0%, rgba(160,160,160,0.25) 50%, rgba(6,182,212,0.20) 100%)',
           boxShadow: isFocused
             ? '0 0 0 3px rgba(124,58,237,0.10), 0 8px 32px rgba(124,58,237,0.14)'
             : '0 4px 20px rgba(0,0,0,0.30)',
@@ -105,7 +106,7 @@ const InputBar: React.FC<InputBarProps> = ({ onSend, disabled, sourceLanguage })
             placeholder={t.inputPlaceholder}
             disabled={disabled}
             rows={1}
-            className="flex-1 bg-transparent resize-none outline-none text-[15px] text-white/88 placeholder-white/22 py-[3px] max-h-[160px] leading-[1.6] disabled:cursor-not-allowed"
+            className="flex-1 bg-transparent resize-none outline-none text-[15px] text-white/88 placeholder-white/22 py-[3px] max-h-[160px] leading-[1.6] disabled:cursor-not-allowed rounded-[8px]"
             style={{ fontWeight: 450 }}
           />
 

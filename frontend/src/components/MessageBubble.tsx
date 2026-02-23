@@ -83,9 +83,12 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
     return (
       <div className="flex justify-end">
         <div
-          className={`${bubbleStyle} rounded-2xl rounded-tr-[6px] px-4 py-2.5 text-[14px] leading-[1.65] max-w-[88%] whitespace-pre-wrap`}
+          className={`${bubbleStyle} rounded-2xl rounded-tr-[6px] px-4 py-2.5 text-[14px] leading-[1.65] max-w-[88%] whitespace-pre-wrap ${status === 'streaming' ? 'w-[88%]' : ''}`}
         >
           {content}
+          {status === 'streaming' && (
+            <span className="inline-block w-[2px] h-[14px] ml-[2px] align-middle bg-current opacity-60 animate-pulse" />
+          )}
         </div>
       </div>
     );

@@ -13,7 +13,7 @@ export interface ConversationTurn {
 
   // Right column (processing language, typically English)
   rightUser: string;
-  rightUserStatus: 'idle' | 'translating' | 'complete';
+  rightUserStatus: 'idle' | 'translating' | 'streaming' | 'complete';
   rightAi: string;
   rightAiStatus: 'idle' | 'streaming' | 'complete';
 
@@ -30,6 +30,7 @@ export interface WebSocketMessage {
     | 'processing_complete'
     | 'final_translation'
     | 'output_translation_chunk'
+    | 'input_translation_chunk'
     | 'error';
   step: string;
   content: string;

@@ -36,7 +36,7 @@ The dual-column UI shows both sides — the English reasoning and your native la
 
 ## Quick Start
 
-### Option A — Command Line (development)
+### Option A — Command Line
 
 **Prerequisites:** Python 3.11+, Node.js 18+, a DeepSeek API key and/or OpenAI API key.
 
@@ -69,7 +69,7 @@ Open **http://localhost:3000** — done.
 
 ---
 
-### Option B — Docker (recommended)
+### Option B — Docker
 
 **Prerequisites:** [Docker](https://docs.docker.com/get-docker/) and [Docker Compose](https://docs.docker.com/compose/install/).
 
@@ -185,12 +185,6 @@ ThinkLingo/
 - **Add an LLM provider** — extend `src/llms/base.py`, register in `src/utils/llm_factory.py`
 - **Add a language** — update `src/utils/language_config.py`, agent prompts, and `frontend/src/utils/i18n.ts`
 - **Add a response type** — update `src/utils/config.py` and `frontend/src/utils/i18n.ts`
-
----
-
-## Self-Hosting on a Server
-
-See **[DEPLOY.md](DEPLOY.md)** for the full guide on deploying ThinkLingo to your own server with HTTPS.
 
 ---
 

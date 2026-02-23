@@ -260,14 +260,19 @@ async def process_streaming_chat(websocket: WebSocket, request_data: Dict[str, A
                 metadata={"from": source_language, "to": processing_language}
             ))
 
-            # Run blocking translation in thread pool so the event loop stays free
-            translation_result = await asyncio.to_thread(
-                orchestrator.translate_text,
-                message, source_language, processing_language, translation_method
-            )
-
-            if translation_result["success"]:
-                processed_input = translation_result["translated_text"]
+            if translation_method == 'llm':
+                # LLM translation — stream tokens to the frontend in real time
+                processed_input = ""
+                async for token in _stream_translation(
+                    orchestrator.translator, message, source_language, processing_language
+                ):
+                    processed_input += token
+                    await manager.send_message(websocket, StreamingMessage(
+                        type="input_translation_chunk",
+                        step="input_translation",
+                        content=token,
+                        metadata={"is_final": False}
+                    ))
                 await manager.send_message(websocket, StreamingMessage(
                     type="translation_complete",
                     step="input_translation",
@@ -275,7 +280,21 @@ async def process_streaming_chat(websocket: WebSocket, request_data: Dict[str, A
                     metadata={"original": message, "translated": processed_input}
                 ))
             else:
-                raise Exception(f"Translation failed: {translation_result.get('error', 'Unknown error')}")
+                # Google translate — batch, notify start then send result
+                translation_result = await asyncio.to_thread(
+                    orchestrator.translate_text,
+                    message, source_language, processing_language, translation_method
+                )
+                if translation_result["success"]:
+                    processed_input = translation_result["translated_text"]
+                    await manager.send_message(websocket, StreamingMessage(
+                        type="translation_complete",
+                        step="input_translation",
+                        content=processed_input,
+                        metadata={"original": message, "translated": processed_input}
+                    ))
+                else:
+                    raise Exception(f"Translation failed: {translation_result.get('error', 'Unknown error')}")
         else:
             processed_input = message
             await manager.send_message(websocket, StreamingMessage(

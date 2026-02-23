@@ -32,9 +32,10 @@ const TranslationChat: React.FC = () => {
   const handleWsMessageRef = useRef<(msg: WebSocketMessage) => void>(() => {});
 
   const conversationHistoryRef  = useRef<Array<{ role: 'user' | 'assistant'; content: string }>>([]);
-  const pendingEnglishInputRef  = useRef('');
-  const rightAiAccumulatorRef   = useRef('');
-  const leftAiAccumulatorRef    = useRef('');
+  const pendingEnglishInputRef    = useRef('');
+  const rightUserAccumulatorRef   = useRef('');
+  const rightAiAccumulatorRef     = useRef('');
+  const leftAiAccumulatorRef      = useRef('');
 
   useEffect(() => {
     handleWsMessageRef.current = handleWebSocketMessage;
@@ -91,10 +92,12 @@ const TranslationChat: React.FC = () => {
   };
 
   const connectWebSocket = useCallback(() => {
-    const wsUrl =
-      process.env.NODE_ENV === 'production'
-        ? `wss://${window.location.host}/ws/chat`
-        : 'ws://localhost:8000/ws/chat';
+    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    // In development, connect directly to the backend port to bypass CRA's
+    // WebSocket proxy limitations. In production, nginx routes /ws/ correctly.
+    const isDev = process.env.NODE_ENV === 'development';
+    const wsHost = isDev ? `${window.location.hostname}:8000` : window.location.host;
+    const wsUrl = `${wsProtocol}//${wsHost}/ws/chat`;
 
     wsRef.current = new WebSocket(wsUrl);
     wsRef.current.onopen    = () => console.log('WebSocket connected');
@@ -120,6 +123,11 @@ const TranslationChat: React.FC = () => {
 
   const handleWebSocketMessage = (msg: WebSocketMessage) => {
     switch (msg.type) {
+      case 'input_translation_chunk':
+        rightUserAccumulatorRef.current += msg.content;
+        updateLastTurn({ rightUser: rightUserAccumulatorRef.current, rightUserStatus: 'streaming' });
+        break;
+
       case 'translation_complete':
         if (msg.step === 'input_translation') {
           pendingEnglishInputRef.current = msg.content;
@@ -178,8 +186,9 @@ const TranslationChat: React.FC = () => {
       return;
     }
 
-    rightAiAccumulatorRef.current  = '';
-    leftAiAccumulatorRef.current   = '';
+    rightUserAccumulatorRef.current = '';
+    rightAiAccumulatorRef.current   = '';
+    leftAiAccumulatorRef.current    = '';
 
     const newTurn: ConversationTurn = {
       id:                `${Date.now()}-${Math.random()}`,
@@ -236,13 +245,18 @@ const TranslationChat: React.FC = () => {
               </svg>
             </div>
           </div>
-          {/* Gradient title */}
-          <span
-            className="text-[18px] font-bold tracking-[-0.3px]"
-            style={{ background: 'linear-gradient(90deg, #c4b5fd 0%, #f0f0ff 50%, #67e8f9 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}
-          >
-            {t.appTitle}
-          </span>
+          {/* Gradient title + subtitle */}
+          <div className="flex flex-col gap-0">
+            <span
+              className="text-[18px] font-bold tracking-[-0.3px] leading-tight"
+              style={{ background: 'linear-gradient(90deg, #c4b5fd 0%, #f0f0ff 50%, #67e8f9 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}
+            >
+              {t.appTitle}
+            </span>
+            <span className="text-[11px] text-white/50 tracking-[0.1px] leading-tight">
+              Ask in Any Language, Think in English
+            </span>
+          </div>
         </div>
 
         {/* Settings button — gear rotates on hover */}
