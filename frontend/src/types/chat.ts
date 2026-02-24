@@ -65,3 +65,5 @@ export interface ChatSettings {
   responseType: string;
   translationMethod: string;
 }
+
+export type ColumnFocus = 'both' | 'left' | 'right';
