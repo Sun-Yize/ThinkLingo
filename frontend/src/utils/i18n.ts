@@ -12,6 +12,14 @@ export interface UIText {
   translationMethodLLM: string;
   done: string;
 
+  // API configuration (shown only when allowUserApiKeys=true)
+  apiConfig: string;
+  deepseekApiKey: string;
+  openaiApiKey: string;
+  mainLlmProvider: string;
+  translationLlmProvider: string;
+  providerAuto: string;
+
   // Column headers
   leftColLabel: string;
   rightColLabel: string;
@@ -41,6 +49,13 @@ const texts: Record<string, UIText> = {
     translationMethodGoogle: 'Google Translate (Fast)',
     translationMethodLLM: 'LLM Translation (High quality, streaming)',
     done: 'Done',
+
+    apiConfig: 'API Configuration',
+    deepseekApiKey: 'DeepSeek API Key',
+    openaiApiKey: 'OpenAI API Key',
+    mainLlmProvider: 'Reasoning LLM',
+    translationLlmProvider: 'Translation LLM',
+    providerAuto: 'Auto (use available key)',
 
     leftColLabel: 'Original / Target',
     rightColLabel: 'Processing Language',
@@ -73,6 +88,13 @@ const texts: Record<string, UIText> = {
     translationMethodLLM: 'LLM 翻译（高质量，支持流式）',
     done: '完成',
 
+    apiConfig: 'API 配置',
+    deepseekApiKey: 'DeepSeek API Key',
+    openaiApiKey: 'OpenAI API Key',
+    mainLlmProvider: '推理模型',
+    translationLlmProvider: '翻译模型',
+    providerAuto: '自动（使用已填写的 Key）',
+
     leftColLabel: '原始 / 目标',
     rightColLabel: '处理语言',
 
@@ -104,6 +126,13 @@ const texts: Record<string, UIText> = {
     translationMethodLLM: 'LLM 翻訳（高品質・ストリーミング対応）',
     done: '完了',
 
+    apiConfig: 'API 設定',
+    deepseekApiKey: 'DeepSeek API キー',
+    openaiApiKey: 'OpenAI API キー',
+    mainLlmProvider: '推論モデル',
+    translationLlmProvider: '翻訳モデル',
+    providerAuto: '自動（利用可能なキーを使用）',
+
     leftColLabel: '元の言語 / 対象言語',
     rightColLabel: '処理言語',
 
@@ -134,6 +163,13 @@ const texts: Record<string, UIText> = {
     translationMethodGoogle: 'Google 번역 (빠름)',
     translationMethodLLM: 'LLM 번역 (고품질 · 스트리밍 지원)',
     done: '완료',
+
+    apiConfig: 'API 설정',
+    deepseekApiKey: 'DeepSeek API 키',
+    openaiApiKey: 'OpenAI API 키',
+    mainLlmProvider: '추론 모델',
+    translationLlmProvider: '번역 모델',
+    providerAuto: '자동 (사용 가능한 키 사용)',
 
     leftColLabel: '원본 / 대상',
     rightColLabel: '처리 언어',

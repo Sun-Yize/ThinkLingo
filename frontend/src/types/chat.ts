@@ -64,6 +64,9 @@ export interface ChatSettings {
   processingLanguage: string;
   responseType: string;
   translationMethod: string;
+  apiKeys: { deepseek: string; openai: string };
+  mainLlmProvider: 'auto' | 'deepseek' | 'openai';
+  translationLlmProvider: 'auto' | 'gpt35' | 'openai' | 'deepseek';
 }
 
 export type ColumnFocus = 'both' | 'left' | 'right';

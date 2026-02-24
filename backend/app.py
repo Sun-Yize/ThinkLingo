@@ -25,6 +25,9 @@ logger = logging.getLogger(__name__)
 from backend.orchestrator.translation_orchestrator import TranslationOrchestrator
 from backend.utils.config import Config
 from backend.utils.llm_factory import LLMFactory
+from backend.utils.language_config import LanguageConfig
+from backend.agents.translator_agent import TranslatorAgent
+from backend.agents.questioner_agent import QuestionerAgent
 
 # Bounded thread pool — avoids unbounded resource consumption under load
 _executor = ThreadPoolExecutor(max_workers=int(os.getenv("MAX_WORKERS", "20")))
@@ -32,9 +35,15 @@ _executor = ThreadPoolExecutor(max_workers=int(os.getenv("MAX_WORKERS", "20")))
 # Global orchestrator instance
 orchestrator = None
 
+_DEFAULT_MODELS = {
+    'deepseek': 'deepseek-chat',
+    'openai':   'gpt-4o-mini',
+    'gpt35':    'gpt-3.5-turbo',
+}
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Initialize the orchestrator on startup"""
+    """Initialize the orchestrator on startup (non-fatal if no API keys configured)"""
     global orchestrator
     try:
         config = Config.from_env()
@@ -42,10 +51,11 @@ async def lifespan(app: FastAPI):
         translation_llm_client = LLMFactory.create_translation_llm(config)
         orchestrator = TranslationOrchestrator(llm_client, translation_llm_client, config)
         logger.info("Translation orchestrator initialized successfully")
-        yield
+    except ValueError as e:
+        logger.warning(f"Orchestrator not initialized (will use per-request keys): {e}")
     except Exception as e:
-        logger.error(f"Failed to initialize orchestrator: {e}")
-        raise
+        logger.warning(f"Orchestrator not initialized (will use per-request keys): {e}")
+    yield
 
 app = FastAPI(title="Translation-Based LLM API", version="1.0.0", lifespan=lifespan)
 
@@ -68,6 +78,13 @@ class StreamingMessage(BaseModel):
     metadata: Optional[Dict[str, Any]] = None
 
 # REST API Endpoints
+@app.get("/api/config")
+async def get_app_config():
+    """Return feature flags for the frontend"""
+    return {
+        "allow_user_api_keys": os.getenv("ALLOW_USER_API_KEYS", "false").lower() == "true"
+    }
+
 @app.get("/api/health")
 async def health_check():
     """Health check endpoint"""
@@ -80,18 +97,22 @@ async def health_check():
 @app.get("/api/languages")
 async def get_supported_languages():
     """Get list of supported languages"""
-    if not orchestrator:
-        raise HTTPException(status_code=500, detail="Orchestrator not initialized")
-
-    return orchestrator.get_supported_languages()
+    if orchestrator:
+        return orchestrator.get_supported_languages()
+    return LanguageConfig().get_language_pairs_for_display()
 
 @app.get("/api/response-types")
 async def get_response_types():
     """Get list of supported response types"""
-    if not orchestrator:
-        raise HTTPException(status_code=500, detail="Orchestrator not initialized")
-
-    return orchestrator.get_supported_response_types()
+    if orchestrator:
+        return orchestrator.get_supported_response_types()
+    return {
+        "general":     "General purpose responses for everyday queries",
+        "creative":    "Creative and imaginative responses",
+        "analytical":  "Detailed analytical responses with structured reasoning",
+        "educational": "Educational responses with clear explanations",
+        "technical":   "Technical responses with precise terminology",
+    }
 
 # WebSocket for streaming
 class ConnectionManager:
@@ -136,14 +157,6 @@ async def websocket_chat_endpoint(websocket: WebSocket):
                 continue
 
             request_data = json.loads(data)
-
-            if not orchestrator:
-                await manager.send_message(websocket, StreamingMessage(
-                    type="error",
-                    step="initialization",
-                    content="Orchestrator not initialized"
-                ))
-                continue
 
             # Process the request with streaming
             await process_streaming_chat(websocket, request_data)
@@ -229,6 +242,60 @@ async def _stream_inference(questioner, prompt: str, response_type: str, convers
     await producer_future  # ensure thread is cleaned up
 
 
+def _resolve_agents(request_data: Dict[str, Any]):
+    """
+    Build (TranslatorAgent, QuestionerAgent) for this request.
+
+    If the request carries API keys, per-request LLM instances are created.
+    Otherwise falls back to the global orchestrator's agents.
+    Raises ValueError if no keys are available and the orchestrator is not ready.
+    """
+    deepseek_key = (request_data.get('deepseek_api_key') or '').strip()
+    openai_key   = (request_data.get('openai_api_key')   or '').strip()
+    main_prov    = request_data.get('main_llm_provider',        'auto')
+    trans_prov   = request_data.get('translation_llm_provider', 'auto')
+
+    # ── Resolve main (questioner) provider ──────────────────────────
+    if main_prov == 'auto':
+        if deepseek_key:
+            main_prov = 'deepseek'
+        elif openai_key:
+            main_prov = 'openai'
+        else:
+            main_prov = None
+
+    # ── Resolve translation provider ────────────────────────────────
+    if trans_prov == 'auto':
+        if openai_key:
+            trans_prov = 'gpt35'
+        elif deepseek_key:
+            trans_prov = 'deepseek'
+        else:
+            trans_prov = None
+
+    # ── Build questioner ────────────────────────────────────────────
+    if main_prov:
+        key = deepseek_key if main_prov == 'deepseek' else openai_key
+        main_llm = LLMFactory.create_specific_llm(main_prov, key, _DEFAULT_MODELS.get(main_prov))
+        questioner = QuestionerAgent(main_llm)
+    else:
+        if orchestrator is None:
+            raise ValueError("No API key provided and server has no pre-configured key")
+        questioner = orchestrator.questioner
+
+    # ── Build translator ────────────────────────────────────────────
+    if trans_prov:
+        key = openai_key if trans_prov in ('gpt35', 'openai') else deepseek_key
+        trans_llm = LLMFactory.create_specific_llm(trans_prov, key, _DEFAULT_MODELS.get(trans_prov))
+        translator = TranslatorAgent(trans_llm)
+    else:
+        if orchestrator is None:
+            raise ValueError("No API key provided and server has no pre-configured key")
+        translator = orchestrator.translator
+
+    return translator, questioner
+
+
 async def process_streaming_chat(websocket: WebSocket, request_data: Dict[str, Any]):
     """Process chat request with streaming updates"""
 
@@ -247,6 +314,15 @@ async def process_streaming_chat(websocket: WebSocket, request_data: Dict[str, A
         conversation_history = conversation_history[-max_messages:]
 
     try:
+        translator, questioner = _resolve_agents(request_data)
+    except ValueError as e:
+        await manager.send_message(websocket, StreamingMessage(
+            type="error", step="initialization",
+            content=f"No API key available: {e}"
+        ))
+        return
+
+    try:
         # Step 1: Input translation (if needed)
         if source_language != processing_language:
             await manager.send_message(websocket, StreamingMessage(
@@ -260,7 +336,7 @@ async def process_streaming_chat(websocket: WebSocket, request_data: Dict[str, A
                 # LLM translation — stream tokens to the frontend in real time
                 processed_input = ""
                 async for token in _stream_translation(
-                    orchestrator.translator, message, source_language, processing_language
+                    translator, message, source_language, processing_language
                 ):
                     processed_input += token
                     await manager.send_message(websocket, StreamingMessage(
@@ -277,10 +353,14 @@ async def process_streaming_chat(websocket: WebSocket, request_data: Dict[str, A
                 ))
             else:
                 # Google translate — batch, notify start then send result
-                translation_result = await asyncio.to_thread(
-                    orchestrator.translate_text,
-                    message, source_language, processing_language, translation_method
-                )
+                try:
+                    translated = await asyncio.to_thread(
+                        translator.translate,
+                        message, source_language, processing_language, 'google'
+                    )
+                    translation_result = {"success": True, "translated_text": translated}
+                except Exception as _te:
+                    translation_result = {"success": False, "error": str(_te)}
                 if translation_result["success"]:
                     processed_input = translation_result["translated_text"]
                     await manager.send_message(websocket, StreamingMessage(
@@ -310,7 +390,7 @@ async def process_streaming_chat(websocket: WebSocket, request_data: Dict[str, A
 
         processed_response = ""
         async for token in _stream_inference(
-            orchestrator.questioner, processed_input, response_type,
+            questioner, processed_input, response_type,
             conversation_history=conversation_history or None
         ):
             processed_response += token
@@ -334,7 +414,7 @@ async def process_streaming_chat(websocket: WebSocket, request_data: Dict[str, A
                 # LLM translation — stream tokens to the frontend in real time
                 final_response = ""
                 async for token in _stream_translation(
-                    orchestrator.translator, processed_response, processing_language, target_language
+                    translator, processed_response, processing_language, target_language
                 ):
                     final_response += token
                     await manager.send_message(websocket, StreamingMessage(
@@ -358,10 +438,14 @@ async def process_streaming_chat(websocket: WebSocket, request_data: Dict[str, A
                     metadata={"from": processing_language, "to": target_language}
                 ))
 
-                translation_result = await asyncio.to_thread(
-                    orchestrator.translate_text,
-                    processed_response, processing_language, target_language, translation_method
-                )
+                try:
+                    translated_out = await asyncio.to_thread(
+                        translator.translate,
+                        processed_response, processing_language, target_language, 'google'
+                    )
+                    translation_result = {"success": True, "translated_text": translated_out}
+                except Exception as _te:
+                    translation_result = {"success": False, "error": str(_te)}
 
                 if translation_result["success"]:
                     final_response = translation_result["translated_text"]
