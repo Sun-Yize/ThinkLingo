@@ -7,9 +7,8 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt uvloop
 
 # Copy application source
-COPY api_server.py .
-COPY src/ src/
+COPY backend/ backend/
 
 EXPOSE 8000
 
-CMD ["uvicorn", "api_server:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4", "--loop", "uvloop"]
+CMD ["uvicorn", "backend.app:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4", "--loop", "uvloop"]

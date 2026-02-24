@@ -97,8 +97,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
   const t = getT(settings.sourceLanguage);
 
   const translationMethodOptions: SelectOption[] = [
-    { value: 'google', label: t.translationMethodGoogle },
     { value: 'llm',    label: t.translationMethodLLM },
+    { value: 'google', label: t.translationMethodGoogle },
   ];
 
   const languageOptions: SelectOption[] = languages.map(l => ({

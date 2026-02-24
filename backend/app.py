@@ -5,7 +5,6 @@ Provides WebSocket streaming and REST API endpoints
 
 import logging
 import os
-import sys
 import asyncio
 import json
 from concurrent.futures import ThreadPoolExecutor
@@ -23,12 +22,9 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Add src to Python path for imports
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'src'))
-
-from src.orchestrator.translation_orchestrator import TranslationOrchestrator
-from src.utils.config import Config
-from src.utils.llm_factory import LLMFactory
+from backend.orchestrator.translation_orchestrator import TranslationOrchestrator
+from backend.utils.config import Config
+from backend.utils.llm_factory import LLMFactory
 
 # Bounded thread pool — avoids unbounded resource consumption under load
 _executor = ThreadPoolExecutor(max_workers=int(os.getenv("MAX_WORKERS", "20")))

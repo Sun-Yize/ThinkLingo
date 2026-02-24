@@ -14,6 +14,8 @@
 
 </div>
 
+![ThinkLingo UI](assets/img01.png)
+
 ---
 
 ## Why ThinkLingo?
@@ -50,20 +52,29 @@ cp .env.template .env
 
 Open `.env` and fill in your API keys (at minimum `DEEPSEEK_API_KEY` and `OPENAI_API_KEY`).
 
-**2. Start the backend**
+**2. Start everything with one command**
 
 ```bash
-pip install -r requirements.txt
-uvicorn api_server:app --reload --port 8000
+bash start.sh
 ```
 
-**3. Start the frontend** (in a new terminal)
+`start.sh` installs all dependencies (first run), starts the backend on port 8000, and starts the frontend on port 3000. Press `Ctrl+C` to stop both.
+
+<details>
+<summary>Manual startup (without the script)</summary>
 
 ```bash
+# Terminal 1 — backend
+pip install -r requirements.txt
+uvicorn backend.app:app --reload --port 8000
+
+# Terminal 2 — frontend
 cd frontend
 npm install
 npm start
 ```
+
+</details>
 
 Open **http://localhost:3000** — done.
 
@@ -152,8 +163,8 @@ CORS_ORIGINS=http://localhost:3000
 
 ```
 ThinkLingo/
-├── api_server.py                        # FastAPI entry point + WebSocket
-├── src/
+├── backend/
+│   ├── app.py                           # FastAPI entry point + WebSocket
 │   ├── orchestrator/
 │   │   └── translation_orchestrator.py  # 4-step pipeline coordinator
 │   ├── agents/
@@ -172,6 +183,7 @@ ThinkLingo/
 ├── nginx/
 │   ├── nginx-local.conf                 # Local Docker config
 │   └── nginx.conf                       # Production config (HTTPS)
+├── start.sh                             # One-command local startup
 ├── docker-compose.yml                   # Local deployment
 ├── docker-compose.prod.yml              # Production overlay
 ├── Dockerfile                           # Backend image
@@ -182,9 +194,9 @@ ThinkLingo/
 
 ## Extending
 
-- **Add an LLM provider** — extend `src/llms/base.py`, register in `src/utils/llm_factory.py`
-- **Add a language** — update `src/utils/language_config.py`, agent prompts, and `frontend/src/utils/i18n.ts`
-- **Add a response type** — update `src/utils/config.py` and `frontend/src/utils/i18n.ts`
+- **Add an LLM provider** — extend `backend/llms/base.py`, register in `backend/utils/llm_factory.py`
+- **Add a language** — update `backend/utils/language_config.py`, agent prompts, and `frontend/src/utils/i18n.ts`
+- **Add a response type** — update `backend/agents/questioner_agent.py` and `frontend/src/utils/i18n.ts`
 
 ---
 
