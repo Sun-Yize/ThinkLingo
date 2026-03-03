@@ -210,6 +210,34 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
               menuPosition="fixed"
             />
           </div>
+
+          {/* Smart Prompt Routing toggle */}
+          <div>
+            <label className="block text-[11px] font-medium text-white/35 mb-1.5 uppercase tracking-wider">
+              {t.promptRouting}
+            </label>
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-[12px] text-white/45 leading-snug">{t.promptRoutingHint}</span>
+              <button
+                onClick={() => update({ enablePromptRouting: !settings.enablePromptRouting })}
+                aria-label={settings.enablePromptRouting ? t.promptRoutingOff : t.promptRoutingOn}
+                className={`relative flex-shrink-0 w-11 h-6 rounded-full transition-colors duration-200 cursor-pointer focus:outline-none ${
+                  settings.enablePromptRouting
+                    ? 'bg-violet-600'
+                    : 'bg-white/[0.10]'
+                }`}
+              >
+                <span
+                  className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform duration-200 ${
+                    settings.enablePromptRouting ? 'translate-x-5' : 'translate-x-0'
+                  }`}
+                />
+              </button>
+            </div>
+            <p className="mt-1.5 text-[11px] text-white/25">
+              {settings.enablePromptRouting ? t.promptRoutingOn : t.promptRoutingOff}
+            </p>
+          </div>
         </div>
 
         {/* Footer */}

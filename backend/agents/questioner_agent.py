@@ -112,6 +112,7 @@ If you're unsure about something, acknowledge the uncertainty rather than guessi
         prompt: str,
         response_type: str = "general",
         conversation_history: Optional[list] = None,
+        system_prompt_override: Optional[str] = None,
         **kwargs
     ) -> Generator[str, None, None]:
         """
@@ -120,11 +121,14 @@ If you're unsure about something, acknowledge the uncertainty rather than guessi
         Args:
             conversation_history: List of prior turns as {"role": "user"|"assistant", "content": str}.
                                   Contents should be in the processing language (English).
+            system_prompt_override: When provided, bypasses _get_system_prompt_for_type() and uses
+                                    this system prompt directly (e.g. from the prompt router).
 
         Returns:
             Generator yielding text chunks as they arrive from the LLM.
         """
-        system_prompt = self._get_system_prompt_for_type(response_type)
+        system_prompt = system_prompt_override if system_prompt_override is not None \
+            else self._get_system_prompt_for_type(response_type)
 
         # Build full messages array: system + history + current user message
         messages = [{"role": "system", "content": system_prompt}]

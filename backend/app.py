@@ -28,12 +28,18 @@ from backend.utils.llm_factory import LLMFactory
 from backend.utils.language_config import LanguageConfig
 from backend.agents.translator_agent import TranslatorAgent
 from backend.agents.questioner_agent import QuestionerAgent
+import re
+
+from backend.prompt_router import PromptRouter, TemplateRegistry
 
 # Bounded thread pool — avoids unbounded resource consumption under load
 _executor = ThreadPoolExecutor(max_workers=int(os.getenv("MAX_WORKERS", "20")))
 
 # Global orchestrator instance
 orchestrator = None
+
+# Template registry loaded once at import time
+_template_registry = TemplateRegistry()
 
 _DEFAULT_MODELS = {
     'deepseek': 'deepseek-chat',
@@ -207,7 +213,14 @@ async def _stream_translation(translator, text: str, source_language: str, targe
     await producer_future
 
 
-async def _stream_inference(questioner, prompt: str, response_type: str, conversation_history: list = None, **kwargs):
+async def _stream_inference(
+    questioner,
+    prompt: str,
+    response_type: str,
+    conversation_history: list = None,
+    system_prompt_override: Optional[str] = None,
+    **kwargs,
+):
     """
     Async generator that wraps the synchronous LLM streaming generator.
 
@@ -222,7 +235,9 @@ async def _stream_inference(questioner, prompt: str, response_type: str, convers
         try:
             for token in questioner.stream_generate_response(
                 prompt, response_type=response_type,
-                conversation_history=conversation_history, **kwargs
+                conversation_history=conversation_history,
+                system_prompt_override=system_prompt_override,
+                **kwargs
             ):
                 loop.call_soon_threadsafe(queue.put_nowait, token)
         except Exception as exc:
@@ -243,6 +258,42 @@ async def _stream_inference(questioner, prompt: str, response_type: str, convers
         yield item
 
     await producer_future  # ensure thread is cleaned up
+
+
+async def _stream_routing(router: PromptRouter, user_message: str, processing_language: str):
+    """
+    Async generator that streams routing output token by token.
+    The LLM outputs [Template Label] on the first line, followed by the system prompt.
+    Uses the same thread-pool + queue pattern as _stream_inference.
+    """
+    loop = asyncio.get_running_loop()
+    queue: asyncio.Queue = asyncio.Queue()
+
+    def _producer():
+        try:
+            for token in router.route_stream(user_message, processing_language):
+                loop.call_soon_threadsafe(queue.put_nowait, token)
+        except Exception as exc:
+            loop.call_soon_threadsafe(queue.put_nowait, exc)
+        finally:
+            loop.call_soon_threadsafe(queue.put_nowait, None)
+
+    producer_future = loop.run_in_executor(_executor, _producer)
+    while True:
+        item = await queue.get()
+        if item is None:
+            break
+        if isinstance(item, Exception):
+            raise item
+        yield item
+    await producer_future
+
+
+def _resolve_router(request_data: Dict[str, Any], translator_agent) -> Optional[PromptRouter]:
+    """Return a PromptRouter if routing is enabled, else None."""
+    if not request_data.get("enable_prompt_routing", False):
+        return None
+    return PromptRouter(llm_client=translator_agent.llm_client, registry=_template_registry)
 
 
 def _resolve_agents(request_data: Dict[str, Any]):
@@ -358,7 +409,90 @@ async def process_streaming_chat(websocket: WebSocket, request_data: Dict[str, A
         return
 
     try:
-        # Step 1: Input translation (if needed)
+        # Step 0: Prompt Routing (optional) ────────────────────────────────
+        # Runs BEFORE translation on the original user message so the router
+        # sees the natural phrasing.  The generated system prompt is written
+        # in the processing language.
+        routed_system_prompt: Optional[str] = None
+        router = _resolve_router(request_data, translator)
+        if router is not None:
+            await manager.send_message(websocket, StreamingMessage(
+                type="prompt_routing_start",
+                step="routing",
+                content="",
+                metadata={}
+            ))
+
+            header_buffer = ""
+            header_parsed = False
+            routing_label = ""
+            routed_system_prompt = ""
+
+            try:
+                async for token in _stream_routing(router, message, processing_language):
+                    if not header_parsed:
+                        header_buffer += token
+                        if "\n" in header_buffer:
+                            header_line, _, remainder = header_buffer.partition("\n")
+                            m = re.match(r"\[(.+?)\]", header_line.strip())
+                            routing_label = m.group(1) if m else "General Assistant"
+                            header_parsed = True
+                            await manager.send_message(websocket, StreamingMessage(
+                                type="prompt_routing_label",
+                                step="routing",
+                                content=routing_label,
+                                metadata={"template_label": routing_label}
+                            ))
+                            remainder = remainder.lstrip("\n")
+                            if remainder:
+                                routed_system_prompt += remainder
+                                await manager.send_message(websocket, StreamingMessage(
+                                    type="prompt_routing_chunk",
+                                    step="routing",
+                                    content=remainder,
+                                    metadata={}
+                                ))
+                    else:
+                        routed_system_prompt += token
+                        await manager.send_message(websocket, StreamingMessage(
+                            type="prompt_routing_chunk",
+                            step="routing",
+                            content=token,
+                            metadata={}
+                        ))
+
+                # Edge case: no newline was ever produced
+                if not header_parsed:
+                    m = re.match(r"\[(.+?)\]", header_buffer.strip())
+                    if m:
+                        routing_label = m.group(1)
+                        routed_system_prompt = header_buffer[m.end():].strip()
+                    else:
+                        routing_label = "General Assistant"
+                        routed_system_prompt = header_buffer
+                    await manager.send_message(websocket, StreamingMessage(
+                        type="prompt_routing_label",
+                        step="routing",
+                        content=routing_label,
+                        metadata={"template_label": routing_label}
+                    ))
+
+                if not routed_system_prompt.strip():
+                    fallback_t = _template_registry.get_fallback()
+                    routed_system_prompt = fallback_t.system_prompt
+
+            except Exception as _re:
+                logger.warning(f"Prompt routing failed: {_re}, disabling routing for this request")
+                routed_system_prompt = None
+
+            await manager.send_message(websocket, StreamingMessage(
+                type="prompt_routing_complete",
+                step="routing",
+                content=routed_system_prompt or "",
+                metadata={"template_label": routing_label}
+            ))
+
+        # Step 1: Input translation (if needed) ───────────────────────────
         if source_language != processing_language:
             await manager.send_message(websocket, StreamingMessage(
                 type="translation_start",
@@ -426,7 +560,8 @@ async def process_streaming_chat(websocket: WebSocket, request_data: Dict[str, A
         processed_response = ""
         async for token in _stream_inference(
             questioner, processed_input, response_type,
-            conversation_history=conversation_history or None
+            conversation_history=conversation_history or None,
+            system_prompt_override=routed_system_prompt,
         ):
             processed_response += token
             await manager.send_message(websocket, StreamingMessage(

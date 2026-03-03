@@ -19,6 +19,11 @@ export interface ConversationTurn {
 
   status: 'active' | 'complete' | 'error';
   error?: string;
+
+  // Prompt routing (optional — only present when routing is enabled)
+  routingLabel?: string;
+  refinedPrompt?: string;
+  refinedPromptStatus?: 'streaming' | 'complete';
 }
 
 export interface WebSocketMessage {
@@ -31,6 +36,10 @@ export interface WebSocketMessage {
     | 'final_translation'
     | 'output_translation_chunk'
     | 'input_translation_chunk'
+    | 'prompt_routing_start'
+    | 'prompt_routing_label'
+    | 'prompt_routing_chunk'
+    | 'prompt_routing_complete'
     | 'error';
   step: string;
   content: string;
@@ -43,6 +52,7 @@ export interface WebSocketMessage {
     chunk_index?: number;
     is_final?: boolean;
     skipped?: boolean;
+    template_label?: string;
     [key: string]: any;
   };
 }
@@ -64,6 +74,7 @@ export interface ChatSettings {
   processingLanguage: string;
   responseType: string;
   translationMethod: string;
+  enablePromptRouting: boolean;
   apiKeys: {
     deepseek: string;
     openai: string;

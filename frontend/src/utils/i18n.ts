@@ -33,6 +33,15 @@ export interface UIText {
   emptyStateSame: string;
   emptyStateDiff: string;
 
+  // Prompt routing
+  promptRouting: string;
+  promptRoutingOn: string;
+  promptRoutingOff: string;
+  promptRoutingHint: string;
+  promptRoutingActive: string;
+  routingBadgePrefix: string;
+  refinedPromptLabel: string;
+
   // Response type labels (key → localized label)
   responseTypeLabels: Record<string, string>;
 }
@@ -66,6 +75,14 @@ const texts: Record<string, UIText> = {
     translating: 'Translating…',
     emptyStateSame: 'Both columns show identical content (source = processing language)',
     emptyStateDiff: 'Left: source/target language  ·  Right: processing language',
+
+    promptRouting: 'Smart Prompt Routing',
+    promptRoutingOn: 'Enabled',
+    promptRoutingOff: 'Disabled',
+    promptRoutingHint: 'Automatically select the best system prompt for each message',
+    promptRoutingActive: 'Selecting best prompt…',
+    routingBadgePrefix: 'Prompt:',
+    refinedPromptLabel: 'System Prompt',
 
     responseTypeLabels: {
       general:     'General — everyday queries',
@@ -105,6 +122,14 @@ const texts: Record<string, UIText> = {
     emptyStateSame: '两列内容相同（源语言与处理语言一致）',
     emptyStateDiff: '左列：原文 / 目标语言  ·  右列：处理语言',
 
+    promptRouting: '智能提示词路由',
+    promptRoutingOn: '已启用',
+    promptRoutingOff: '已禁用',
+    promptRoutingHint: '自动为每条消息选择最佳系统提示词',
+    promptRoutingActive: '正在选择提示词…',
+    routingBadgePrefix: '模板：',
+    refinedPromptLabel: '系统提示词',
+
     responseTypeLabels: {
       general:     '通用 — 日常对话',
       creative:    '创意 — 创意性回答',
@@ -143,6 +168,14 @@ const texts: Record<string, UIText> = {
     emptyStateSame: '両列は同じ内容です（ソース言語 = 処理言語）',
     emptyStateDiff: '左列：元の言語  ·  右列：処理言語',
 
+    promptRouting: 'スマートプロンプトルーティング',
+    promptRoutingOn: '有効',
+    promptRoutingOff: '無効',
+    promptRoutingHint: '各メッセージに最適なシステムプロンプトを自動選択',
+    promptRoutingActive: 'プロンプトを選択中…',
+    routingBadgePrefix: 'テンプレート:',
+    refinedPromptLabel: 'システムプロンプト',
+
     responseTypeLabels: {
       general:     '一般 — 日常的な質問',
       creative:    'クリエイティブ — 創造的な回答',
@@ -180,6 +213,14 @@ const texts: Record<string, UIText> = {
     translating: '번역 중…',
     emptyStateSame: '두 열은 동일한 내용입니다 (소스 언어 = 처리 언어)',
     emptyStateDiff: '왼쪽: 원본 언어  ·  오른쪽: 처리 언어',
+
+    promptRouting: '스마트 프롬프트 라우팅',
+    promptRoutingOn: '활성화',
+    promptRoutingOff: '비활성화',
+    promptRoutingHint: '각 메시지에 적합한 시스템 프롬프트를 자동으로 선택합니다',
+    promptRoutingActive: '프롬프트 선택 중…',
+    routingBadgePrefix: '템플릿:',
+    refinedPromptLabel: '시스템 프롬프트',
 
     responseTypeLabels: {
       general:     '일반 — 일상적인 질문',

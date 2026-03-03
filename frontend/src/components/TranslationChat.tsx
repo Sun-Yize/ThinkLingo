@@ -18,6 +18,7 @@ const DEFAULT_SETTINGS: ChatSettings = {
   processingLanguage:      'english',
   responseType:            'general',
   translationMethod:       'llm',
+  enablePromptRouting:     false,
   apiKeys:                 { deepseek: '', openai: '', anthropic: '', google: '', qwen: '' },
   mainLlm:                 { provider: 'auto', model: '' },
   translationLlm:          { provider: 'auto', model: '' },
@@ -58,10 +59,11 @@ const TranslationChat: React.FC = () => {
   const handleWsMessageRef = useRef<(msg: WebSocketMessage) => void>(() => {});
 
   const conversationHistoryRef  = useRef<Array<{ role: 'user' | 'assistant'; content: string }>>([]);
-  const pendingEnglishInputRef    = useRef('');
-  const rightUserAccumulatorRef   = useRef('');
-  const rightAiAccumulatorRef     = useRef('');
-  const leftAiAccumulatorRef      = useRef('');
+  const pendingEnglishInputRef      = useRef('');
+  const rightUserAccumulatorRef     = useRef('');
+  const rightAiAccumulatorRef       = useRef('');
+  const leftAiAccumulatorRef        = useRef('');
+  const refinedPromptAccumulatorRef = useRef('');
 
   useEffect(() => {
     handleWsMessageRef.current = handleWebSocketMessage;
@@ -211,6 +213,30 @@ const TranslationChat: React.FC = () => {
         setIsProcessing(false);
         break;
 
+      case 'prompt_routing_start':
+        break;
+
+      case 'prompt_routing_label':
+        updateLastTurn({
+          routingLabel: msg.metadata?.template_label ?? msg.content,
+        });
+        break;
+
+      case 'prompt_routing_chunk':
+        refinedPromptAccumulatorRef.current += msg.content;
+        updateLastTurn({
+          refinedPrompt:       refinedPromptAccumulatorRef.current,
+          refinedPromptStatus: 'streaming',
+        });
+        break;
+
+      case 'prompt_routing_complete':
+        updateLastTurn({
+          refinedPrompt:       msg.content,
+          refinedPromptStatus: 'complete',
+        });
+        break;
+
       case 'error':
         updateLastTurn({ status: 'error', error: msg.content, leftAiStatus: 'complete', rightAiStatus: 'complete' });
         setIsProcessing(false);
@@ -227,9 +253,10 @@ const TranslationChat: React.FC = () => {
       return;
     }
 
-    rightUserAccumulatorRef.current = '';
-    rightAiAccumulatorRef.current   = '';
-    leftAiAccumulatorRef.current    = '';
+    rightUserAccumulatorRef.current     = '';
+    rightAiAccumulatorRef.current       = '';
+    leftAiAccumulatorRef.current        = '';
+    refinedPromptAccumulatorRef.current = '';
 
     const newTurn: ConversationTurn = {
       id:                `${Date.now()}-${Math.random()}`,
@@ -258,6 +285,7 @@ const TranslationChat: React.FC = () => {
       response_type:            settings.responseType,
       processing_language:      settings.processingLanguage,
       translation_method:       settings.translationMethod,
+      enable_prompt_routing:    settings.enablePromptRouting,
       conversation_history:     conversationHistoryRef.current,
       deepseek_api_key:         settings.apiKeys.deepseek,
       openai_api_key:           settings.apiKeys.openai,
