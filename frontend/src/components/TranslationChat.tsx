@@ -18,15 +18,27 @@ const DEFAULT_SETTINGS: ChatSettings = {
   processingLanguage:      'english',
   responseType:            'general',
   translationMethod:       'llm',
-  apiKeys:                 { deepseek: '', openai: '' },
-  mainLlmProvider:         'auto',
-  translationLlmProvider:  'auto',
+  apiKeys:                 { deepseek: '', openai: '', anthropic: '', google: '', qwen: '' },
+  mainLlm:                 { provider: 'auto', model: '' },
+  translationLlm:          { provider: 'auto', model: '' },
+  qwenRegion:              'cn',
 };
 
 function loadSettings(): ChatSettings {
   try {
     const stored = localStorage.getItem('thinklingo_settings');
-    if (stored) return { ...DEFAULT_SETTINGS, ...JSON.parse(stored) };
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      return {
+        ...DEFAULT_SETTINGS,
+        ...parsed,
+        // Deep-merge apiKeys so new provider defaults aren't lost when
+        // upgrading from older localStorage that only had deepseek/openai.
+        apiKeys:        { ...DEFAULT_SETTINGS.apiKeys,        ...(parsed.apiKeys        ?? {}) },
+        mainLlm:        { ...DEFAULT_SETTINGS.mainLlm,        ...(parsed.mainLlm        ?? {}) },
+        translationLlm: { ...DEFAULT_SETTINGS.translationLlm, ...(parsed.translationLlm ?? {}) },
+      };
+    }
   } catch { /* ignore */ }
   return DEFAULT_SETTINGS;
 }
@@ -249,8 +261,16 @@ const TranslationChat: React.FC = () => {
       conversation_history:     conversationHistoryRef.current,
       deepseek_api_key:         settings.apiKeys.deepseek,
       openai_api_key:           settings.apiKeys.openai,
-      main_llm_provider:        settings.mainLlmProvider,
-      translation_llm_provider: settings.translationLlmProvider,
+      anthropic_api_key:        settings.apiKeys.anthropic,
+      google_api_key:           settings.apiKeys.google,
+      qwen_api_key:             settings.apiKeys.qwen,
+      qwen_base_url:            settings.qwenRegion === 'cn'
+                                  ? 'https://dashscope.aliyuncs.com/compatible-mode/v1'
+                                  : 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1',
+      main_llm_provider:        settings.mainLlm.provider,
+      main_llm_model:           settings.mainLlm.model,
+      translation_llm_provider: settings.translationLlm.provider,
+      translation_llm_model:    settings.translationLlm.model,
     }));
   };
 

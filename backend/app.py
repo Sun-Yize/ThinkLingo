@@ -39,6 +39,9 @@ _DEFAULT_MODELS = {
     'deepseek': 'deepseek-chat',
     'openai':   'gpt-4o-mini',
     'gpt35':    'gpt-3.5-turbo',
+    'claude':   'claude-opus-4-6',
+    'gemini':   'gemini-2.0-flash',
+    'qwen':     'qwen-plus',
 }
 
 @asynccontextmanager
@@ -250,43 +253,75 @@ def _resolve_agents(request_data: Dict[str, Any]):
     Otherwise falls back to the global orchestrator's agents.
     Raises ValueError if no keys are available and the orchestrator is not ready.
     """
-    deepseek_key = (request_data.get('deepseek_api_key') or '').strip()
-    openai_key   = (request_data.get('openai_api_key')   or '').strip()
-    main_prov    = request_data.get('main_llm_provider',        'auto')
-    trans_prov   = request_data.get('translation_llm_provider', 'auto')
+    deepseek_key  = (request_data.get('deepseek_api_key')  or '').strip()
+    openai_key    = (request_data.get('openai_api_key')    or '').strip()
+    anthropic_key = (request_data.get('anthropic_api_key') or '').strip()
+    google_key    = (request_data.get('google_api_key')    or '').strip()
+    qwen_key      = (request_data.get('qwen_api_key')      or '').strip()
+    qwen_base_url = (request_data.get('qwen_base_url')     or '').strip() or None
 
-    # ── Resolve main (questioner) provider ──────────────────────────
+    main_prov   = request_data.get('main_llm_provider',        'auto')
+    trans_prov  = request_data.get('translation_llm_provider', 'auto')
+    main_model  = (request_data.get('main_llm_model')          or '').strip()
+    trans_model = (request_data.get('translation_llm_model')   or '').strip()
+
+    # Key lookup by provider — used when building per-request LLM instances
+    _key_map: Dict[str, str] = {
+        'deepseek': deepseek_key,
+        'openai':   openai_key,
+        'gpt35':    openai_key,
+        'claude':   anthropic_key,
+        'gemini':   google_key,
+        'qwen':     qwen_key,
+    }
+
+    # ── Resolve main (questioner) provider ─────────────────────────
+    # auto priority: deepseek → openai → claude → gemini → qwen
     if main_prov == 'auto':
-        if deepseek_key:
-            main_prov = 'deepseek'
-        elif openai_key:
-            main_prov = 'openai'
+        for p in ('deepseek', 'openai', 'claude', 'gemini', 'qwen'):
+            if _key_map[p]:
+                main_prov = p
+                break
         else:
             main_prov = None
 
-    # ── Resolve translation provider ────────────────────────────────
+    # ── Resolve translation provider ───────────────────────────────
+    # auto priority: openai → deepseek → claude → gemini → qwen
     if trans_prov == 'auto':
-        if openai_key:
-            trans_prov = 'gpt35'
-        elif deepseek_key:
-            trans_prov = 'deepseek'
+        for p in ('openai', 'deepseek', 'claude', 'gemini', 'qwen'):
+            if _key_map[p]:
+                trans_prov = p
+                break
         else:
             trans_prov = None
 
-    # ── Build questioner ────────────────────────────────────────────
+    # Extra kwargs per provider (currently only Qwen needs base_url)
+    _extra: Dict[str, Dict] = {
+        'qwen': {'base_url': qwen_base_url} if qwen_base_url else {},
+    }
+
+    # Resolve final models: use per-request value, fall back to server default
+    main_resolved_model  = main_model  or _DEFAULT_MODELS.get(main_prov,  '')
+    trans_resolved_model = trans_model or _DEFAULT_MODELS.get(trans_prov, '')
+
+    # ── Build questioner ───────────────────────────────────────────
     if main_prov:
-        key = deepseek_key if main_prov == 'deepseek' else openai_key
-        main_llm = LLMFactory.create_specific_llm(main_prov, key, _DEFAULT_MODELS.get(main_prov))
+        main_llm = LLMFactory.create_specific_llm(
+            main_prov, _key_map[main_prov], main_resolved_model,
+            **_extra.get(main_prov, {})
+        )
         questioner = QuestionerAgent(main_llm)
     else:
         if orchestrator is None:
             raise ValueError("No API key provided and server has no pre-configured key")
         questioner = orchestrator.questioner
 
-    # ── Build translator ────────────────────────────────────────────
+    # ── Build translator ───────────────────────────────────────────
     if trans_prov:
-        key = openai_key if trans_prov in ('gpt35', 'openai') else deepseek_key
-        trans_llm = LLMFactory.create_specific_llm(trans_prov, key, _DEFAULT_MODELS.get(trans_prov))
+        trans_llm = LLMFactory.create_specific_llm(
+            trans_prov, _key_map[trans_prov], trans_resolved_model,
+            **_extra.get(trans_prov, {})
+        )
         translator = TranslatorAgent(trans_llm)
     else:
         if orchestrator is None:

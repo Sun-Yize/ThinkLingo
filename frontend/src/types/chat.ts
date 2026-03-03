@@ -64,9 +64,22 @@ export interface ChatSettings {
   processingLanguage: string;
   responseType: string;
   translationMethod: string;
-  apiKeys: { deepseek: string; openai: string };
-  mainLlmProvider: 'auto' | 'deepseek' | 'openai';
-  translationLlmProvider: 'auto' | 'gpt35' | 'openai' | 'deepseek';
+  apiKeys: {
+    deepseek: string;
+    openai: string;
+    anthropic: string;
+    google: string;
+    qwen: string;
+  };
+  mainLlm: {
+    provider: 'auto' | 'deepseek' | 'openai' | 'claude' | 'gemini' | 'qwen';
+    model: string;
+  };
+  translationLlm: {
+    provider: 'auto' | 'openai' | 'deepseek' | 'claude' | 'gemini' | 'qwen';
+    model: string;
+  };
+  qwenRegion: 'cn' | 'intl';
 }
 
 export type ColumnFocus = 'both' | 'left' | 'right';

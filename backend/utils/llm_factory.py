@@ -1,117 +1,81 @@
 """
-LLM Factory for creating LLM instances based on configuration
+LLM Factory — creates provider instances from config or explicit parameters.
+
+Supported providers: deepseek | openai | gpt35 | claude | gemini | qwen
 """
 
-from typing import Union
 from ..llms.base import BaseLLM
-from ..llms.openai_llm import OpenAILLM
 from ..llms.deepseek_llm import DeepSeekLLM
+from ..llms.openai_llm import OpenAILLM
 from ..llms.gpt35_llm import GPT35LLM
+from ..llms.claude_llm import ClaudeLLM
+from ..llms.gemini_llm import GeminiLLM
+from ..llms.qwen_llm import QwenLLM
 from .config import Config
 
 
 class LLMFactory:
-    """Factory class for creating LLM instances"""
+    """Factory for creating LLM instances."""
 
-    @staticmethod
-    def create_llm(config: Config) -> BaseLLM:
-        """
-        Create LLM instance based on configuration
+    # Maps provider name → (LLM class, api_key_attr, model_attr)
+    _REGISTRY = {
+        "deepseek": (DeepSeekLLM, "deepseek_api_key",  "deepseek_model"),
+        "openai":   (OpenAILLM,   "openai_api_key",    "openai_model"),
+        "gpt35":    (GPT35LLM,    "openai_api_key",    "gpt35_model"),
+        "claude":   (ClaudeLLM,   "anthropic_api_key", "claude_model"),
+        "gemini":   (GeminiLLM,   "google_api_key",    "gemini_model"),
+        "qwen":     (QwenLLM,     "qwen_api_key",      "qwen_model"),
+    }
 
-        Args:
-            config: Configuration object
+    @classmethod
+    def create_llm(cls, config: Config) -> BaseLLM:
+        """Create the main LLM from configuration."""
+        return cls._create_from_config(config, config.default_llm_provider)
 
-        Returns:
-            LLM instance
+    @classmethod
+    def create_translation_llm(cls, config: Config) -> BaseLLM:
+        """Create the translation LLM from configuration."""
+        return cls._create_from_config(config, config.translation_llm_provider)
 
-        Raises:
-            ValueError: If unsupported provider is specified
-        """
-        if config.default_llm_provider == "deepseek":
-            return DeepSeekLLM(
-                api_key=config.deepseek_api_key,
-                model_name=config.deepseek_model
+    @classmethod
+    def _create_from_config(cls, config: Config, provider: str) -> BaseLLM:
+        if provider not in cls._REGISTRY:
+            raise ValueError(
+                f"Unsupported LLM provider: {provider!r}. "
+                f"Choose from: {list(cls._REGISTRY)}"
             )
-        elif config.default_llm_provider == "openai":
-            return OpenAILLM(
-                api_key=config.openai_api_key,
-                model_name=config.openai_model
-            )
-        elif config.default_llm_provider == "gpt35":
-            return GPT35LLM(
-                api_key=config.openai_api_key,
-                model_name=config.gpt35_model
-            )
-        else:
-            raise ValueError(f"Unsupported LLM provider: {config.default_llm_provider}")
+        llm_cls, key_attr, model_attr = cls._REGISTRY[provider]
+        return llm_cls(
+            api_key=getattr(config, key_attr),
+            model_name=getattr(config, model_attr),
+        )
 
-    @staticmethod
-    def create_translation_llm(config: Config) -> BaseLLM:
-        """
-        Create LLM instance for translation based on configuration
-
-        Args:
-            config: Configuration object
-
-        Returns:
-            LLM instance for translation
-
-        Raises:
-            ValueError: If unsupported provider is specified
-        """
-        if config.translation_llm_provider == "deepseek":
-            return DeepSeekLLM(
-                api_key=config.deepseek_api_key,
-                model_name=config.deepseek_model
-            )
-        elif config.translation_llm_provider == "openai":
-            return OpenAILLM(
-                api_key=config.openai_api_key,
-                model_name=config.openai_model
-            )
-        elif config.translation_llm_provider == "gpt35":
-            return GPT35LLM(
-                api_key=config.openai_api_key,
-                model_name=config.gpt35_model
-            )
-        else:
-            raise ValueError(f"Unsupported translation LLM provider: {config.translation_llm_provider}")
-
-    @staticmethod
+    @classmethod
     def create_specific_llm(
+        cls,
         provider: str,
         api_key: str,
-        model_name: str = None
+        model_name: str = None,
+        **kwargs,
     ) -> BaseLLM:
         """
-        Create specific LLM instance
+        Create an ephemeral LLM instance for per-request API keys.
 
         Args:
-            provider: LLM provider ("deepseek", "openai", or "gpt35")
-            api_key: API key
-            model_name: Model name (optional)
-
-        Returns:
-            LLM instance
-
-        Raises:
-            ValueError: If unsupported provider is specified
+            provider:   Provider name string
+            api_key:    API key for the provider
+            model_name: Optional model override
+            **kwargs:   Extra params forwarded to the LLM constructor
+                        (e.g. base_url for QwenLLM)
         """
-        if provider == "deepseek":
-            return DeepSeekLLM(api_key=api_key, model_name=model_name)
-        elif provider == "openai":
-            return OpenAILLM(api_key=api_key, model_name=model_name)
-        elif provider == "gpt35":
-            return GPT35LLM(api_key=api_key, model_name=model_name)
-        else:
-            raise ValueError(f"Unsupported LLM provider: {provider}")
+        if provider not in cls._REGISTRY:
+            raise ValueError(
+                f"Unsupported LLM provider: {provider!r}. "
+                f"Choose from: {list(cls._REGISTRY)}"
+            )
+        llm_cls = cls._REGISTRY[provider][0]
+        return llm_cls(api_key=api_key, model_name=model_name, **kwargs)
 
-    @staticmethod
-    def get_supported_providers() -> list:
-        """
-        Get list of supported providers
-
-        Returns:
-            List of supported provider names
-        """
-        return ["deepseek", "openai", "gpt35"]
+    @classmethod
+    def get_supported_providers(cls) -> list:
+        return list(cls._REGISTRY.keys())

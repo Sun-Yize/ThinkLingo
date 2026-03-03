@@ -1,5 +1,6 @@
 # LLM clients
 openai>=1.0.0
+anthropic>=0.40.0
 
 # Environment & config
 python-dotenv>=1.0.0
