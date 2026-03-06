@@ -7,6 +7,8 @@
     font-family: 'DM Sans', 'Inter', system-ui, sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    /* Prevent iOS from zooming on input focus (font-size < 16px) */
+    -webkit-text-size-adjust: 100%;
   }
 
   body {
@@ -14,6 +16,23 @@
     padding: 0;
     background-color: #0B0B14;
     color: rgba(255, 255, 255, 0.88);
+    /* Safe area insets for notched devices */
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+}
+
+/* ── Mobile touch optimizations ──────────────────────────────────── */
+@media (max-width: 767px) {
+  /* Prevent text selection on interactive elements */
+  button, [role="button"] {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* Slightly larger touch targets on mobile for scrollbar-less UX */
+  ::-webkit-scrollbar {
+    width: 0;
+    height: 0;
   }
 }
 

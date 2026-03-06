@@ -195,7 +195,7 @@ const ApiConfigModal: React.FC<ApiConfigModalProps> = ({
       onClick={onClose}
     >
       <div
-        className="rounded-2xl border border-white/[0.08] w-full max-w-md mx-4 overflow-hidden"
+        className="rounded-2xl border border-white/[0.08] w-full max-w-md mx-4 overflow-y-auto max-h-[90vh]"
         style={{
           background: 'rgba(18,18,30,0.92)',
           backdropFilter: 'blur(24px)',

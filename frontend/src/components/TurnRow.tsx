@@ -34,7 +34,7 @@ const TurnRow: React.FC<TurnRowProps> = ({ turn, sourceLanguage, columnFocus }) 
           leftHidden
             /* collapsed: no padding, no content → truly 0-height, 0-width */
             ? ''
-            : `flex flex-col gap-4 px-6 py-6 group-hover:bg-violet-500/[0.018] ${showDivider ? 'border-r border-white/[0.04]' : ''}`
+            : `flex flex-col gap-4 px-3 py-4 md:px-6 md:py-6 group-hover:bg-violet-500/[0.018] ${showDivider ? 'border-r border-white/[0.04]' : ''}`
         }`}
       >
         {!leftHidden && (
@@ -76,7 +76,7 @@ const TurnRow: React.FC<TurnRowProps> = ({ turn, sourceLanguage, columnFocus }) 
         className={`overflow-hidden min-w-0 transition-colors duration-200 ${
           rightHidden
             ? ''
-            : 'flex flex-col gap-4 px-6 py-6 group-hover:bg-cyan-500/[0.018]'
+            : 'flex flex-col gap-4 px-3 py-4 md:px-6 md:py-6 group-hover:bg-cyan-500/[0.018]'
         }`}
       >
         {!rightHidden && (

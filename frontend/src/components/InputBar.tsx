@@ -67,7 +67,7 @@ const InputBar: React.FC<InputBarProps> = ({ onSend, disabled, sourceLanguage })
   const canSend = !disabled && message.trim().length > 0;
 
   return (
-    <div className="relative flex-shrink-0 bg-[rgba(10,10,18,0.88)] backdrop-blur-xl px-5 py-4">
+    <div className="relative flex-shrink-0 bg-[rgba(10,10,18,0.88)] backdrop-blur-xl px-3 py-3 md:px-5 md:py-4" style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}>
 
       {/* Top separator — dual-tone, matches header/column-header system */}
       <div
@@ -135,8 +135,8 @@ const InputBar: React.FC<InputBarProps> = ({ onSend, disabled, sourceLanguage })
         </div>
       </div>
 
-      {/* Keyboard shortcut hint with <kbd> chips */}
-      <div className="flex items-center justify-center gap-1.5 mt-2.5 flex-wrap">
+      {/* Keyboard shortcut hint with <kbd> chips — hidden on mobile */}
+      <div className="hidden md:flex items-center justify-center gap-1.5 mt-2.5 flex-wrap">
         {renderHint(t.inputHint)}
       </div>
     </div>

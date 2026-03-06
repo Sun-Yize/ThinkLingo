@@ -83,7 +83,7 @@ const ChatHistory: React.FC<ChatHistoryProps> = ({
               </span>
               <button
                 onClick={e => { e.stopPropagation(); setConfirmDeleteId(c.id); }}
-                className="opacity-0 group-hover/item:opacity-100 flex-shrink-0 p-1 text-white/20 hover:text-red-400 transition-all duration-150 cursor-pointer rounded hover:bg-white/[0.05]"
+                className="opacity-100 md:opacity-0 md:group-hover/item:opacity-100 flex-shrink-0 p-1 text-white/20 hover:text-red-400 transition-all duration-150 cursor-pointer rounded hover:bg-white/[0.05]"
                 aria-label="Delete"
               >
                 <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7">
@@ -100,8 +100,14 @@ const ChatHistory: React.FC<ChatHistoryProps> = ({
   if (!isOpen) return null;
 
   return (
+    <>
+    {/* Mobile backdrop */}
     <div
-      className="h-full w-72 flex flex-col flex-shrink-0"
+      className="md:hidden fixed inset-0 z-40 bg-black/60 backdrop-blur-sm"
+      onClick={onClose}
+    />
+    <div
+      className="fixed inset-y-0 left-0 z-50 w-[85vw] max-w-[320px] md:relative md:inset-auto md:z-auto md:w-72 h-full flex flex-col flex-shrink-0"
       style={{
         background: 'rgba(14,14,24,0.96)',
         borderRight: '1px solid rgba(255,255,255,0.06)',
@@ -150,11 +156,11 @@ const ChatHistory: React.FC<ChatHistoryProps> = ({
       {/* Delete confirmation modal */}
       {confirmDeleteId && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm"
           onClick={() => setConfirmDeleteId(null)}
         >
           <div
-            className="w-80 rounded-2xl border border-white/[0.08] p-6"
+            className="w-[calc(100%-2rem)] max-w-80 rounded-2xl border border-white/[0.08] p-6"
             style={{ background: 'rgba(18,18,30,0.97)', boxShadow: '0 24px 64px rgba(0,0,0,0.55)' }}
             onClick={e => e.stopPropagation()}
           >
@@ -178,6 +184,7 @@ const ChatHistory: React.FC<ChatHistoryProps> = ({
         </div>
       )}
     </div>
+    </>
   );
 };
 

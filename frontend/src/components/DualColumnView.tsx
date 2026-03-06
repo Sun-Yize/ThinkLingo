@@ -16,12 +16,36 @@ const langCode: Record<string, string> = {
   korean:   'KO',
 };
 
+const useIsMobile = (breakpoint = 768) => {
+  const [isMobile, setIsMobile] = useState(() =>
+    typeof window !== 'undefined' ? window.innerWidth < breakpoint : false
+  );
+  useEffect(() => {
+    const mq = window.matchMedia(`(max-width: ${breakpoint - 1}px)`);
+    const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches);
+    setIsMobile(mq.matches);
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+  }, [breakpoint]);
+  return isMobile;
+};
+
 const DualColumnView: React.FC<DualColumnViewProps> = ({ turns, settings, languages }) => {
-  const [columnFocus, setColumnFocus]  = useState<ColumnFocus>('both');
+  const isMobile = useIsMobile();
+  const [columnFocus, setColumnFocus]  = useState<ColumnFocus>(() =>
+    typeof window !== 'undefined' && window.innerWidth < 768 ? 'left' : 'both'
+  );
   const bottomRef                       = useRef<HTMLDivElement>(null);
   const scrollRef                       = useRef<HTMLDivElement>(null);
   const userScrolledUpRef               = useRef(false);
   const lastScrollTopRef                = useRef(0);
+
+  // Force single-column on mobile, allow 'both' on desktop
+  useEffect(() => {
+    if (isMobile && columnFocus === 'both') {
+      setColumnFocus('left');
+    }
+  }, [isMobile, columnFocus]);
 
   const handleScroll = () => {
     const el = scrollRef.current;
@@ -79,11 +103,47 @@ const DualColumnView: React.FC<DualColumnViewProps> = ({ turns, settings, langua
   return (
     <div className="flex flex-col h-full">
 
-      {/* ── Sticky column headers ─────────────────────────────────── */}
+      {/* ── Mobile tab bar ─────────────────────────────────────────── */}
+      {isMobile && (
+        <div className="sticky top-0 z-10 bg-[rgba(11,11,20,0.92)] backdrop-blur-xl">
+          <div className="flex">
+            <button
+              onClick={() => setColumnFocus('left')}
+              className={`flex-1 flex items-center justify-center gap-2 py-3 text-[13px] font-semibold transition-colors duration-200 ${
+                columnFocus === 'left'
+                  ? 'text-violet-300 border-b-2 border-violet-500'
+                  : 'text-white/35 border-b-2 border-transparent'
+              }`}
+            >
+              <span className="w-6 h-6 rounded-lg bg-violet-500/[0.10] border border-violet-500/[0.18] flex items-center justify-center">
+                <span className="text-[9px] font-bold font-mono text-violet-300 tracking-widest">{codeOf(leftLang)}</span>
+              </span>
+              <span className="truncate">{getLanguageName(leftLang)}</span>
+              <span className="text-[9px] font-mono text-violet-400/50 tracking-wider">SRC</span>
+            </button>
+            <button
+              onClick={() => setColumnFocus('right')}
+              className={`flex-1 flex items-center justify-center gap-2 py-3 text-[13px] font-semibold transition-colors duration-200 ${
+                columnFocus === 'right'
+                  ? 'text-cyan-300 border-b-2 border-cyan-500'
+                  : 'text-white/35 border-b-2 border-transparent'
+              }`}
+            >
+              <span className="w-6 h-6 rounded-lg bg-cyan-500/[0.08] border border-cyan-500/[0.14] flex items-center justify-center">
+                <span className="text-[9px] font-bold font-mono text-cyan-300 tracking-widest">{codeOf(rightLang)}</span>
+              </span>
+              <span className="truncate">{getLanguageName(rightLang)}</span>
+              <span className="text-[9px] font-mono text-cyan-400/45 tracking-wider">PROC</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Desktop sticky column headers ───────────────────────────── */}
+      {!isMobile && (
       <div className="grid sticky top-0 z-10 bg-[rgba(11,11,20,0.90)] backdrop-blur-xl" style={gridStyle}>
 
         {/* ── Left column header ── */}
-        {/* When collapsed: empty div with no padding/content so it truly vanishes */}
         <div className={`relative overflow-hidden min-w-0 ${leftHidden ? '' : `px-6 py-4 flex items-center gap-3 ${showDivider ? 'border-r border-white/[0.05]' : ''}`}`}>
           {!leftHidden && (
             <>
@@ -107,17 +167,12 @@ const DualColumnView: React.FC<DualColumnViewProps> = ({ turns, settings, langua
                 </div>
               </div>
 
-              {/* SRC indicator + collapse/expand button at right edge (center side) */}
+              {/* SRC indicator + collapse/expand button */}
               <div className="flex-shrink-0 flex items-center gap-1.5">
                 <span className="w-[5px] h-[5px] rounded-full bg-violet-400/55" />
                 <span className="text-[9.5px] font-bold font-mono text-violet-400/50 tracking-[0.12em] uppercase select-none">
                   SRC
                 </span>
-                {/*
-                  Sits at the RIGHT edge of the left header, next to the center divider.
-                  • Both visible  → «« collapse left column
-                  • Right hidden  → »» expand right column back
-                */}
                 <button
                   onClick={() => setColumnFocus(rightHidden ? 'both' : 'right')}
                   aria-label={rightHidden ? 'Expand right column' : 'Collapse left column'}
@@ -150,11 +205,6 @@ const DualColumnView: React.FC<DualColumnViewProps> = ({ turns, settings, langua
               {/* Cyan top-accent line */}
               <div className="absolute top-0 left-0 w-4/5 h-[2px] rounded-full bg-gradient-to-r from-cyan-500/55 to-transparent" />
 
-              {/*
-                Sits at the LEFT edge of the right header, next to the center divider.
-                • Both visible  → »» collapse right column
-                • Left hidden   → «« expand left column back
-              */}
               <button
                 onClick={() => setColumnFocus(leftHidden ? 'both' : 'left')}
                 aria-label={leftHidden ? 'Expand left column' : 'Collapse right column'}
@@ -210,6 +260,7 @@ const DualColumnView: React.FC<DualColumnViewProps> = ({ turns, settings, langua
           style={{ background: 'linear-gradient(90deg, rgba(139,92,246,0.18) 0%, rgba(139,92,246,0.18) 50%, rgba(6,182,212,0.14) 50%, rgba(6,182,212,0.14) 100%)' }}
         />
       </div>
+      )}
 
       {/* ── Turn list ─────────────────────────────────────────────── */}
       <div ref={scrollRef} onScroll={handleScroll} className="flex-1 overflow-y-auto">
