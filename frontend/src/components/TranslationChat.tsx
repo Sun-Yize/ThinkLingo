@@ -14,11 +14,22 @@ const NATIVE_NAMES: Record<string, string> = {
   korean:   '한국어',
 };
 
-// Optional auth token — set via REACT_APP_AUTH_TOKEN env var at build time
-const AUTH_TOKEN = process.env.REACT_APP_AUTH_TOKEN || '';
+// Optional static auth token — set via REACT_APP_AUTH_TOKEN env var at build time.
+// Prefer dynamic session tokens obtained from POST /api/session.
+const STATIC_AUTH_TOKEN = process.env.REACT_APP_AUTH_TOKEN || '';
 
-const _authHeaders = (): Record<string, string> =>
-  AUTH_TOKEN ? { Authorization: `Bearer ${AUTH_TOKEN}` } : {};
+// Mutable session token — acquired at runtime, not embedded in the bundle.
+let _sessionToken: string = '';
+
+const _authHeaders = (): Record<string, string> => {
+  const token = _sessionToken || STATIC_AUTH_TOKEN;
+  return token ? { Authorization: `Bearer ${token}` } : {};
+};
+
+const _getWsToken = (): string => _sessionToken || STATIC_AUTH_TOKEN;
+
+// Daily quota limit — set from /api/session response
+let _ip_quota_limit = 0;
 
 const MAX_CONVERSATIONS = 50;
 const STORAGE_INDEX_KEY = 'thinklingo_conv_index';
@@ -131,6 +142,7 @@ const TranslationChat: React.FC = () => {
   const [languages, setLanguages]       = useState<Language[]>([]);
   const [responseTypes, setResponseTypes] = useState<ResponseType[]>([]);
   const [allowUserApiKeys, setAllowUserApiKeys] = useState(false);
+  const [quotaRemaining, setQuotaRemaining] = useState<number | null>(null);
 
   // Conversation management
   const [convIndex, setConvIndex]   = useState<ConversationMeta[]>(loadConvIndex);
@@ -160,19 +172,51 @@ const TranslationChat: React.FC = () => {
   });
 
   useEffect(() => {
-    loadLanguages();
-    loadResponseTypes();
-    loadAppConfig();
-    connectWebSocket();
+    // Acquire a dynamic session token before connecting
+    const init = async () => {
+      try {
+        const res = await fetch('/api/session', { method: 'POST' });
+        if (res.ok) {
+          const data = await res.json();
+          _sessionToken = data.session_token;
+          _ip_quota_limit = data.daily_quota ?? 0;
+          // -1 means unlimited — don't show quota indicator
+          const remaining = data.quota_remaining ?? null;
+          setQuotaRemaining(remaining === -1 ? null : remaining);
+        }
+      } catch {
+        // Fall back to static AUTH_TOKEN if session endpoint unavailable
+      }
 
-    // Load the most recent conversation if one exists
-    const index = loadConvIndex();
-    if (index.length > 0) {
-      loadConversation(index[0].id);
-    }
+      loadLanguages();
+      loadResponseTypes();
+      loadAppConfig();
+      connectWebSocket();
+
+      // Load the most recent conversation if one exists
+      const index = loadConvIndex();
+      if (index.length > 0) {
+        loadConversation(index[0].id);
+      }
+    };
+    init();
+
+    // Refresh session token periodically (every 50 minutes for 1h TTL)
+    const refreshInterval = setInterval(async () => {
+      try {
+        const res = await fetch('/api/session', { method: 'POST' });
+        if (res.ok) {
+          const data = await res.json();
+          _sessionToken = data.session_token;
+          // Reconnect WebSocket with new token
+          wsRef.current?.close();
+        }
+      } catch { /* keep existing token */ }
+    }, 50 * 60 * 1000);
 
     return () => {
       isMountedRef.current = false;
+      clearInterval(refreshInterval);
       wsRef.current?.close();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -431,7 +475,8 @@ const TranslationChat: React.FC = () => {
     const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const isDev = process.env.NODE_ENV === 'development';
     const wsHost = isDev ? `${window.location.hostname}:8000` : window.location.host;
-    const wsUrl = `${wsProtocol}//${wsHost}/ws/chat${AUTH_TOKEN ? `?token=${encodeURIComponent(AUTH_TOKEN)}` : ''}`;
+    const wsToken = _getWsToken();
+    const wsUrl = `${wsProtocol}//${wsHost}/ws/chat${wsToken ? `?token=${encodeURIComponent(wsToken)}` : ''}`;
 
     wsRef.current = new WebSocket(wsUrl);
     wsRef.current.onopen    = () => console.log('WebSocket connected');
@@ -581,6 +626,9 @@ const TranslationChat: React.FC = () => {
         break;
 
       case 'error':
+        if (msg.metadata?.quota_exceeded) {
+          setQuotaRemaining(0);
+        }
         updateLastTurn(ctx, { status: 'error', error: msg.content, leftAiStatus: 'complete', rightAiStatus: 'complete' });
         finalizeStream(ctx);
         break;
@@ -641,6 +689,7 @@ const TranslationChat: React.FC = () => {
 
     setTurns(prev => [...prev, newTurn]);
     setIsProcessing(true);
+    setQuotaRemaining(prev => prev !== null ? Math.max(0, prev - 1) : prev);
 
     wsRef.current.send(JSON.stringify({
       message,
@@ -733,6 +782,18 @@ const TranslationChat: React.FC = () => {
 
         {/* Header buttons */}
         <div className="flex items-center gap-2">
+          {/* Quota indicator */}
+          {quotaRemaining !== null && (
+            <span className={`text-[11px] font-medium px-2 py-1 rounded-lg ${
+              quotaRemaining === 0
+                ? 'text-red-400/80 bg-red-500/[0.10]'
+                : quotaRemaining < 20
+                  ? 'text-amber-400/70 bg-amber-500/[0.08]'
+                  : 'text-white/30'
+            }`}>
+              {quotaRemaining}/{_ip_quota_limit}
+            </span>
+          )}
           {/* API Key button — only shown when allowUserApiKeys=true */}
           {allowUserApiKeys && (
             <button

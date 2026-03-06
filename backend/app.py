@@ -8,10 +8,13 @@ import os
 import asyncio
 import json
 import time
+import hmac
+import secrets
 import threading
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
+from datetime import date
 from typing import Optional, Dict, Any
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Depends, Request
@@ -73,12 +76,154 @@ def _validate_qwen_base_url(url: Optional[str]) -> Optional[str]:
     return None
 
 
-async def _verify_auth_token(credentials: Optional[HTTPAuthorizationCredentials] = Depends(_http_bearer)):
-    """Dependency that enforces AUTH_TOKEN when configured."""
+# --- Dynamic Session Management ---
+class SessionManager:
+    """Manages short-lived session tokens bound to client IP."""
+
+    def __init__(self, ttl_seconds: int = 3600, max_sessions_per_ip_per_hour: int = 10):
+        self._sessions: Dict[str, Dict[str, Any]] = {}  # token -> {ip, expires_at}
+        self._creation_log: Dict[str, list[float]] = defaultdict(list)  # ip -> [timestamps]
+        self._ttl = ttl_seconds
+        self._max_per_hour = max_sessions_per_ip_per_hour
+        self._lock = threading.Lock()
+
+    def create_session(self, ip: str) -> Optional[str]:
+        """Create a new session token for the given IP. Returns None if rate limited."""
+        now = time.time()
+        with self._lock:
+            # Rate limit session creation per IP (0 = unlimited)
+            if self._max_per_hour > 0:
+                self._creation_log[ip] = [t for t in self._creation_log[ip] if now - t < 3600]
+                if len(self._creation_log[ip]) >= self._max_per_hour:
+                    return None
+            token = secrets.token_urlsafe(32)
+            self._sessions[token] = {"ip": ip, "expires_at": now + self._ttl}
+            self._creation_log[ip].append(now)
+        return token
+
+    def validate_session(self, token: str, ip: str) -> bool:
+        """Validate a session token. Must match IP and not be expired."""
+        if not token:
+            return False
+        with self._lock:
+            session = self._sessions.get(token)
+            if not session:
+                return False
+            if time.time() > session["expires_at"]:
+                del self._sessions[token]
+                return False
+            return session["ip"] == ip
+        return False
+
+    def cleanup(self):
+        """Remove expired sessions."""
+        now = time.time()
+        with self._lock:
+            expired = [t for t, s in self._sessions.items() if now > s["expires_at"]]
+            for t in expired:
+                del self._sessions[t]
+            # Also clean up old creation logs
+            empty_ips = [ip for ip, ts in self._creation_log.items() if not ts or now - ts[-1] > 3600]
+            for ip in empty_ips:
+                del self._creation_log[ip]
+
+
+# --- Per-IP Daily Message Quota ---
+class IPQuotaManager:
+    """Tracks per-IP daily message counts and enforces quotas."""
+
+    def __init__(self, daily_limit: int = 200):
+        self._daily_limit = daily_limit
+        self._counters: Dict[str, Dict[str, int]] = {}  # ip -> {date_str: count}
+        self._lock = threading.Lock()
+
+    @property
+    def daily_limit(self) -> int:
+        return self._daily_limit
+
+    def check_and_increment(self, ip: str) -> tuple[bool, int]:
+        """
+        Check if IP is within daily quota and increment counter.
+        Returns (allowed: bool, remaining: int).
+        A daily_limit of 0 means unlimited.
+        """
+        if self._daily_limit <= 0:
+            return True, -1  # unlimited
+        today = date.today().isoformat()
+        with self._lock:
+            if ip not in self._counters:
+                self._counters[ip] = {}
+            ip_data = self._counters[ip]
+            # Reset if it's a new day (clean up old dates)
+            old_dates = [d for d in ip_data if d != today]
+            for d in old_dates:
+                del ip_data[d]
+
+            current = ip_data.get(today, 0)
+            if current >= self._daily_limit:
+                return False, 0
+            ip_data[today] = current + 1
+            return True, self._daily_limit - current - 1
+
+    def get_remaining(self, ip: str) -> int:
+        """Get remaining quota for an IP. Returns -1 if unlimited."""
+        if self._daily_limit <= 0:
+            return -1
+        today = date.today().isoformat()
+        with self._lock:
+            current = self._counters.get(ip, {}).get(today, 0)
+            return max(0, self._daily_limit - current)
+
+    def cleanup(self):
+        """Remove stale entries from past days."""
+        today = date.today().isoformat()
+        with self._lock:
+            for ip in list(self._counters.keys()):
+                self._counters[ip] = {d: c for d, c in self._counters[ip].items() if d == today}
+                if not self._counters[ip]:
+                    del self._counters[ip]
+
+
+_session_manager = SessionManager(
+    ttl_seconds=int(os.getenv("SESSION_TTL_SECONDS", "3600")),
+    max_sessions_per_ip_per_hour=int(os.getenv("MAX_SESSIONS_PER_IP_PER_HOUR", "0")),
+)
+_ip_quota = IPQuotaManager(
+    daily_limit=int(os.getenv("DAILY_MESSAGE_QUOTA_PER_IP", "0")),
+)
+
+
+def _get_client_ip(request) -> str:
+    """Extract client IP, respecting X-Forwarded-For from trusted proxies."""
+    forwarded = None
+    if hasattr(request, 'headers'):
+        forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    if hasattr(request, 'client') and request.client:
+        return request.client.host
+    return "unknown"
+
+
+async def _verify_auth_token(
+    request: Request,
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(_http_bearer),
+):
+    """Dependency that enforces authentication via static AUTH_TOKEN or dynamic session token."""
+    # If no AUTH_TOKEN configured and sessions are not required, allow through
     if not _AUTH_TOKEN:
-        return  # auth disabled
-    if credentials is None or credentials.credentials != _AUTH_TOKEN:
-        raise HTTPException(status_code=401, detail="Invalid or missing authentication token")
+        return
+
+    # Check static AUTH_TOKEN first
+    if credentials and credentials.credentials:
+        if hmac.compare_digest(credentials.credentials, _AUTH_TOKEN):
+            return
+        # Could be a session token — validate it
+        ip = _get_client_ip(request)
+        if _session_manager.validate_session(credentials.credentials, ip):
+            return
+
+    raise HTTPException(status_code=401, detail="Invalid or missing authentication token")
 
 
 # Bounded thread pool — avoids unbounded resource consumption under load
@@ -119,7 +264,17 @@ async def lifespan(app: FastAPI):
         logger.warning(f"Orchestrator not initialized (will use per-request keys): {e}")
     except Exception as e:
         logger.warning(f"Orchestrator not initialized (will use per-request keys): {e}")
+
+    # Periodic cleanup task for sessions and quotas
+    async def _periodic_cleanup():
+        while True:
+            await asyncio.sleep(600)  # every 10 minutes
+            _session_manager.cleanup()
+            _ip_quota.cleanup()
+
+    cleanup_task = asyncio.create_task(_periodic_cleanup())
     yield
+    cleanup_task.cancel()
 
 app = FastAPI(title="Translation-Based LLM API", version="1.0.0", lifespan=lifespan)
 
@@ -157,6 +312,35 @@ async def health_check():
         "message": "Translation LLM API is running",
         "orchestrator_ready": orchestrator is not None,
     }
+
+@app.post("/api/session")
+async def create_session(request: Request):
+    """
+    Create a short-lived session token bound to the client IP.
+    No prior authentication required — rate limited by IP.
+    """
+    ip = _get_client_ip(request)
+    token = _session_manager.create_session(ip)
+    if token is None:
+        raise HTTPException(status_code=429, detail="Session creation rate limit exceeded. Try again later.")
+    return {
+        "session_token": token,
+        "expires_in": int(os.getenv("SESSION_TTL_SECONDS", "3600")),
+        "daily_quota": _ip_quota.daily_limit,
+        "quota_remaining": _ip_quota.get_remaining(ip),
+    }
+
+
+@app.get("/api/quota", dependencies=[Depends(_verify_auth_token)])
+async def get_quota(request: Request):
+    """Get remaining daily message quota for the calling IP."""
+    ip = _get_client_ip(request)
+    remaining = _ip_quota.get_remaining(ip)
+    return {
+        "daily_quota": _ip_quota.daily_limit,
+        "remaining": remaining,
+    }
+
 
 @app.get("/api/languages")
 async def get_supported_languages():
@@ -301,11 +485,18 @@ class ConnectionManager:
             if self._ip_counts[ip] == 0:
                 del self._ip_counts[ip]
 
-    async def send_message(self, websocket: WebSocket, message: StreamingMessage):
+    async def send_message(
+        self, websocket: WebSocket, message: StreamingMessage,
+        cancelled: Optional[threading.Event] = None,
+    ):
         try:
             await websocket.send_text(message.model_dump_json())
-        except Exception as e:
-            logger.warning(f"Failed to send WebSocket message: {type(e).__name__}")
+        except Exception:
+            # Connection is dead — signal producers to stop immediately
+            if cancelled and not cancelled.is_set():
+                cancelled.set()
+                logger.info("WebSocket send failed, cancelling stream")
+            self.disconnect(websocket)
 
 manager = ConnectionManager(max_total=_MAX_CONNECTIONS, max_per_ip=_MAX_CONNECTIONS_PER_IP)
 
@@ -321,10 +512,14 @@ async def websocket_chat_endpoint(websocket: WebSocket):
         await websocket.close(code=WS_1008_POLICY_VIOLATION)
         return
 
-    # --- Security: Validate AUTH_TOKEN if configured ---
+    # --- Security: Validate auth token (static AUTH_TOKEN or dynamic session) ---
     if _AUTH_TOKEN:
         token = websocket.query_params.get("token", "")
-        if token != _AUTH_TOKEN:
+        ip = manager._client_ip(websocket)
+        # Accept static AUTH_TOKEN or valid session token
+        token_ok = hmac.compare_digest(token, _AUTH_TOKEN) if token else False
+        session_ok = _session_manager.validate_session(token, ip) if token else False
+        if not token_ok and not session_ok:
             logger.warning("WebSocket connection rejected: invalid or missing auth token")
             await websocket.close(code=WS_1008_POLICY_VIOLATION)
             return
@@ -334,6 +529,8 @@ async def websocket_chat_endpoint(websocket: WebSocket):
 
     # Per-connection rate limiter state
     _msg_timestamps: list[float] = []
+    # Client IP for quota tracking
+    _ws_client_ip = manager._client_ip(websocket)
     # Cancellation signal — set when connection closes to stop producer threads
     cancelled = threading.Event()
 
@@ -353,6 +550,17 @@ async def websocket_chat_endpoint(websocket: WebSocket):
                 ))
                 continue
             _msg_timestamps.append(now)
+
+            # --- Daily quota check per IP ---
+            allowed, remaining = _ip_quota.check_and_increment(_ws_client_ip)
+            if not allowed:
+                await manager.send_message(websocket, StreamingMessage(
+                    type="error",
+                    step="validation",
+                    content=f"Daily message quota exceeded ({_ip_quota.daily_limit} messages/day). Please try again tomorrow.",
+                    metadata={"quota_exceeded": True, "daily_limit": _ip_quota.daily_limit}
+                ))
+                continue
 
             # Reject oversized messages (100 KB limit)
             if len(data) > 100 * 1024:
@@ -608,6 +816,10 @@ async def process_streaming_chat(
 ):
     """Process chat request with streaming updates"""
 
+    async def _send(msg: StreamingMessage):
+        """Send message with cancellation awareness."""
+        await manager.send_message(websocket, msg, cancelled=cancelled)
+
     message = request_data.get("message", "")
     source_language = request_data.get("source_language", "english")
     target_language = request_data.get("target_language", "english")
@@ -627,7 +839,7 @@ async def process_streaming_chat(
         ("processing_language", processing_language),
     ]:
         if lang_val not in _valid_languages:
-            await manager.send_message(websocket, StreamingMessage(
+            await _send(StreamingMessage(
                 type="error", step="validation",
                 content=f"Unsupported {lang_name}: must be one of {sorted(_valid_languages)}"
             ))
@@ -640,7 +852,7 @@ async def process_streaming_chat(
 
     # Limit message length (10,000 chars max)
     if len(message) > 10_000:
-        await manager.send_message(websocket, StreamingMessage(
+        await _send(StreamingMessage(
             type="error", step="validation",
             content="Message too long (max 10,000 characters)"
         ))
@@ -664,7 +876,7 @@ async def process_streaming_chat(
     try:
         translator, questioner = _resolve_agents(request_data)
     except ValueError:
-        await manager.send_message(websocket, StreamingMessage(
+        await _send(StreamingMessage(
             type="error", step="initialization",
             content="No API key available. Please configure an API key in settings."
         ))
@@ -678,7 +890,7 @@ async def process_streaming_chat(
         routed_system_prompt: Optional[str] = None
         router = _resolve_router(request_data, translator)
         if router is not None:
-            await manager.send_message(websocket, StreamingMessage(
+            await _send(StreamingMessage(
                 type="prompt_routing_start",
                 step="routing",
                 content="",
@@ -699,7 +911,7 @@ async def process_streaming_chat(
                             m = re.match(r"\[(.+?)\]", header_line.strip())
                             routing_label = m.group(1) if m else "General Assistant"
                             header_parsed = True
-                            await manager.send_message(websocket, StreamingMessage(
+                            await _send(StreamingMessage(
                                 type="prompt_routing_label",
                                 step="routing",
                                 content=routing_label,
@@ -708,7 +920,7 @@ async def process_streaming_chat(
                             remainder = remainder.lstrip("\n")
                             if remainder:
                                 routed_system_prompt += remainder
-                                await manager.send_message(websocket, StreamingMessage(
+                                await _send(StreamingMessage(
                                     type="prompt_routing_chunk",
                                     step="routing",
                                     content=remainder,
@@ -716,7 +928,7 @@ async def process_streaming_chat(
                                 ))
                     else:
                         routed_system_prompt += token
-                        await manager.send_message(websocket, StreamingMessage(
+                        await _send(StreamingMessage(
                             type="prompt_routing_chunk",
                             step="routing",
                             content=token,
@@ -732,7 +944,7 @@ async def process_streaming_chat(
                     else:
                         routing_label = "General Assistant"
                         routed_system_prompt = header_buffer
-                    await manager.send_message(websocket, StreamingMessage(
+                    await _send(StreamingMessage(
                         type="prompt_routing_label",
                         step="routing",
                         content=routing_label,
@@ -747,7 +959,7 @@ async def process_streaming_chat(
                 logger.warning(f"Prompt routing failed: {_re}, disabling routing for this request")
                 routed_system_prompt = None
 
-            await manager.send_message(websocket, StreamingMessage(
+            await _send(StreamingMessage(
                 type="prompt_routing_complete",
                 step="routing",
                 content=routed_system_prompt or "",
@@ -756,7 +968,7 @@ async def process_streaming_chat(
 
         # Step 1: Input translation (if needed) ───────────────────────────
         if source_language != processing_language:
-            await manager.send_message(websocket, StreamingMessage(
+            await _send(StreamingMessage(
                 type="translation_start",
                 step="input_translation",
                 content=f"Translating from {source_language} to {processing_language}...",
@@ -771,13 +983,13 @@ async def process_streaming_chat(
                     cancelled=cancelled,
                 ):
                     processed_input += token
-                    await manager.send_message(websocket, StreamingMessage(
+                    await _send(StreamingMessage(
                         type="input_translation_chunk",
                         step="input_translation",
                         content=token,
                         metadata={"is_final": False}
                     ))
-                await manager.send_message(websocket, StreamingMessage(
+                await _send(StreamingMessage(
                     type="translation_complete",
                     step="input_translation",
                     content=processed_input,
@@ -795,7 +1007,7 @@ async def process_streaming_chat(
                     translation_result = {"success": False, "error": str(_te)}
                 if translation_result["success"]:
                     processed_input = translation_result["translated_text"]
-                    await manager.send_message(websocket, StreamingMessage(
+                    await _send(StreamingMessage(
                         type="translation_complete",
                         step="input_translation",
                         content=processed_input,
@@ -805,7 +1017,7 @@ async def process_streaming_chat(
                     raise Exception(f"Translation failed: {translation_result.get('error', 'Unknown error')}")
         else:
             processed_input = message
-            await manager.send_message(websocket, StreamingMessage(
+            await _send(StreamingMessage(
                 type="translation_complete",
                 step="input_translation",
                 content=processed_input,
@@ -813,7 +1025,7 @@ async def process_streaming_chat(
             ))
 
         # Step 2: Real streaming inference — tokens arrive as the LLM generates them
-        await manager.send_message(websocket, StreamingMessage(
+        await _send(StreamingMessage(
             type="processing_start",
             step="inference",
             content="Generating response...",
@@ -828,14 +1040,14 @@ async def process_streaming_chat(
             cancelled=cancelled,
         ):
             processed_response += token
-            await manager.send_message(websocket, StreamingMessage(
+            await _send(StreamingMessage(
                 type="processing_chunk",
                 step="inference",
                 content=token,
                 metadata={"is_final": False}
             ))
 
-        await manager.send_message(websocket, StreamingMessage(
+        await _send(StreamingMessage(
             type="processing_complete",
             step="inference",
             content=processed_response,
@@ -852,13 +1064,13 @@ async def process_streaming_chat(
                     cancelled=cancelled,
                 ):
                     final_response += token
-                    await manager.send_message(websocket, StreamingMessage(
+                    await _send(StreamingMessage(
                         type="output_translation_chunk",
                         step="output_translation",
                         content=token,
                         metadata={"is_final": False}
                     ))
-                await manager.send_message(websocket, StreamingMessage(
+                await _send(StreamingMessage(
                     type="final_translation",
                     step="output_translation",
                     content=final_response,
@@ -866,7 +1078,7 @@ async def process_streaming_chat(
                 ))
             else:
                 # Google translate — batch, notify start then send result
-                await manager.send_message(websocket, StreamingMessage(
+                await _send(StreamingMessage(
                     type="translation_start",
                     step="output_translation",
                     content=f"Translating from {processing_language} to {target_language}...",
@@ -884,7 +1096,7 @@ async def process_streaming_chat(
 
                 if translation_result["success"]:
                     final_response = translation_result["translated_text"]
-                    await manager.send_message(websocket, StreamingMessage(
+                    await _send(StreamingMessage(
                         type="final_translation",
                         step="output_translation",
                         content=final_response,
@@ -894,7 +1106,7 @@ async def process_streaming_chat(
                     raise Exception(f"Output translation failed: {translation_result.get('error', 'Unknown error')}")
         else:
             final_response = processed_response
-            await manager.send_message(websocket, StreamingMessage(
+            await _send(StreamingMessage(
                 type="final_translation",
                 step="output_translation",
                 content=final_response,
@@ -903,7 +1115,7 @@ async def process_streaming_chat(
 
     except Exception as e:
         logger.error(f"Processing error: {type(e).__name__}: {e}")
-        await manager.send_message(websocket, StreamingMessage(
+        await _send(StreamingMessage(
             type="error",
             step="processing",
             content=_sanitize_error(e)
