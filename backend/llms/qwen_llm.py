@@ -2,11 +2,12 @@
 Qwen LLM — Alibaba Cloud DashScope OpenAI-compatible endpoint
 Uses the existing `openai` package with a custom base_url (no new dependency).
 
-Latest models (2025):
-  qwen-plus      — balanced speed/quality/cost (default)
-  qwen-max       — highest quality (qwen3-max series)
-  qwen-turbo     — fastest, cheapest
+Latest models (2026):
+  qwen3.5-plus   — latest flagship (default)
+  qwen3-max      — most capable
+  qwen-plus      — balanced speed/quality/cost
   qwq-plus       — reasoning model (thinking mode)
+  qwen-turbo     — fastest, cheapest
 
 Regional base URLs:
   International: https://dashscope-intl.aliyuncs.com/compatible-mode/v1
@@ -52,17 +53,18 @@ class QwenLLM(BaseLLM):
         self.default_model = model_name or self.get_default_model()
 
     def get_default_model(self) -> str:
-        return "qwen-plus"
+        return "qwen3.5-plus"
 
     def get_model_info(self) -> dict:
         return {
             "provider": "alibaba",
             "model": self.default_model,
             "recommended_models": [
-                "qwen-plus",   # balanced (default)
-                "qwen-max",    # highest quality
-                "qwen-turbo",  # fastest / cheapest
-                "qwq-plus",    # reasoning / thinking
+                "qwen3.5-plus", # latest flagship (default)
+                "qwen3-max",    # most capable
+                "qwen-plus",    # balanced
+                "qwq-plus",     # reasoning / thinking
+                "qwen-turbo",   # fastest / cheapest
             ],
         }
 

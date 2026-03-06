@@ -46,8 +46,8 @@ _DEFAULT_MODELS = {
     'openai':   'gpt-4o-mini',
     'gpt35':    'gpt-3.5-turbo',
     'claude':   'claude-opus-4-6',
-    'gemini':   'gemini-2.0-flash',
-    'qwen':     'qwen-plus',
+    'gemini':   'gemini-3.1-pro-preview',
+    'qwen':     'qwen3.5-plus',
 }
 
 @asynccontextmanager

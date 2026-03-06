@@ -22,9 +22,9 @@ class Config:
         anthropic_api_key: Optional[str] = None,
         claude_model: str = "claude-opus-4-6",
         google_api_key: Optional[str] = None,
-        gemini_model: str = "gemini-2.0-flash",
+        gemini_model: str = "gemini-3.1-pro-preview",
         qwen_api_key: Optional[str] = None,
-        qwen_model: str = "qwen-plus",
+        qwen_model: str = "qwen3.5-plus",
         default_response_type: str = "general",
         default_temperature: float = 0.7,
         max_tokens: int = 4000,
@@ -73,8 +73,8 @@ class Config:
         self.openai_model   = openai_model   or os.getenv("OPENAI_MODEL",   "gpt-4o-mini")
         self.gpt35_model    = gpt35_model    or os.getenv("GPT35_MODEL",    "gpt-3.5-turbo")
         self.claude_model   = claude_model   or os.getenv("CLAUDE_MODEL",   "claude-opus-4-6")
-        self.gemini_model   = gemini_model   or os.getenv("GEMINI_MODEL",   "gemini-2.0-flash")
-        self.qwen_model     = qwen_model     or os.getenv("QWEN_MODEL",     "qwen-plus")
+        self.gemini_model   = gemini_model   or os.getenv("GEMINI_MODEL",   "gemini-3.1-pro-preview")
+        self.qwen_model     = qwen_model     or os.getenv("QWEN_MODEL",     "qwen3.5-plus")
 
         # Default Parameters
         self.default_response_type = default_response_type or os.getenv("DEFAULT_RESPONSE_TYPE", "general")
@@ -211,11 +211,11 @@ class Config:
             openai_model=os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
             gpt35_model=os.getenv("GPT35_MODEL", "gpt-3.5-turbo"),
             anthropic_api_key=os.getenv("ANTHROPIC_API_KEY"),
-            claude_model=os.getenv("CLAUDE_MODEL", "claude-3-5-haiku-20241022"),
+            claude_model=os.getenv("CLAUDE_MODEL", "claude-opus-4-6"),
             google_api_key=os.getenv("GOOGLE_API_KEY"),
-            gemini_model=os.getenv("GEMINI_MODEL", "gemini-2.0-flash"),
+            gemini_model=os.getenv("GEMINI_MODEL", "gemini-3.1-pro-preview"),
             qwen_api_key=os.getenv("QWEN_API_KEY"),
-            qwen_model=os.getenv("QWEN_MODEL", "qwen-plus"),
+            qwen_model=os.getenv("QWEN_MODEL", "qwen3.5-plus"),
             default_response_type=os.getenv("DEFAULT_RESPONSE_TYPE", "general"),
             default_temperature=float(os.getenv("DEFAULT_TEMPERATURE", "0.7")),
             max_tokens=int(os.getenv("MAX_TOKENS", "4000")),

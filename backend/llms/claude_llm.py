@@ -1,6 +1,6 @@
 """
 Claude LLM — Anthropic SDK
-Latest models (2025): claude-sonnet-4-5-20250929, claude-3-5-haiku-20241022, claude-opus-4-5
+Latest models (2025): claude-opus-4-6, claude-sonnet-4-6, claude-haiku-4-5-20251001
 API reference: https://docs.anthropic.com/en/api/messages
 
 Authentication:

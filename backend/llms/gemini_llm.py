@@ -2,11 +2,11 @@
 Gemini LLM — Google OpenAI-compatible endpoint
 Uses the existing `openai` package with a custom base_url (no new dependency).
 
-Latest models (2025):
-  gemini-2.0-flash         — fast, stable (default)
-  gemini-2.5-flash         — faster, latest
-  gemini-2.5-pro           — most capable
-  gemini-2.5-flash-thinking — reasoning variant
+Latest models (2026):
+  gemini-3.1-pro-preview   — latest, most capable (default)
+  gemini-2.5-flash         — fast, best price-performance
+  gemini-2.5-pro           — powerful, stable
+  gemini-2.5-flash-lite    — fastest, most budget-friendly
 
 OpenAI-compat endpoint docs:
   https://ai.google.dev/gemini-api/docs/openai
@@ -45,17 +45,17 @@ class GeminiLLM(BaseLLM):
         self.default_model = model_name or self.get_default_model()
 
     def get_default_model(self) -> str:
-        return "gemini-2.0-flash"
+        return "gemini-3.1-pro-preview"
 
     def get_model_info(self) -> dict:
         return {
             "provider": "google",
             "model": self.default_model,
             "recommended_models": [
-                "gemini-2.0-flash",          # stable, fast (default)
-                "gemini-2.5-flash",          # latest fast
-                "gemini-2.5-pro",            # highest quality
-                "gemini-2.5-flash-thinking", # reasoning
+                "gemini-3.1-pro-preview",    # latest, most capable (default)
+                "gemini-2.5-flash",          # fast, best price-performance
+                "gemini-2.5-pro",            # powerful, stable
+                "gemini-2.5-flash-lite",     # fastest, most budget-friendly
             ],
         }
 

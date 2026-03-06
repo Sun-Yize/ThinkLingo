@@ -64,8 +64,8 @@ const PROVIDER_MODELS: Record<string, string[]> = {
   deepseek: ['deepseek-chat', 'deepseek-reasoner'],
   openai:   ['gpt-4o-mini', 'gpt-4o', 'gpt-3.5-turbo'],
   claude:   ['claude-opus-4-6', 'claude-sonnet-4-5', 'claude-haiku-4-5'],
-  gemini:   ['gemini-2.0-flash', 'gemini-2.0-flash-lite', 'gemini-1.5-pro'],
-  qwen:     ['qwen-plus', 'qwen-max', 'qwen-turbo', 'qwq-plus'],
+  gemini:   ['gemini-3.1-pro-preview', 'gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-2.5-flash-lite'],
+  qwen:     ['qwen3.5-plus', 'qwen3-max', 'qwen-plus', 'qwq-plus', 'qwen-turbo'],
 };
 
 // API key rows (field name in apiKeys, display label, placeholder)
