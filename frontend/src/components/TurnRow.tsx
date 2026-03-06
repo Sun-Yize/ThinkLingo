@@ -52,6 +52,17 @@ const TurnRow: React.FC<TurnRowProps> = ({ turn, sourceLanguage, columnFocus }) 
               status={turn.leftAiStatus}
               sourceLanguage={sourceLanguage}
               variant="default"
+              statusHint={
+                turn.leftAiStatus === 'pending'
+                  ? turn.rightAiStatus === 'streaming'
+                    ? t.thinking
+                    : turn.rightUserStatus === 'translating' || turn.rightUserStatus === 'streaming'
+                      ? t.translating
+                      : undefined
+                  : turn.leftAiStatus === 'streaming'
+                    ? t.translatingOutput
+                    : undefined
+              }
             />
             {turn.status === 'error' && turn.error && (
               <p className="text-[12px] text-red-400/75 mt-0.5 pl-[28px]">{turn.error}</p>

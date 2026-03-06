@@ -30,6 +30,8 @@ export interface UIText {
 
   // States
   translating: string;
+  thinking: string;
+  translatingOutput: string;
   emptyStateSame: string;
   emptyStateDiff: string;
 
@@ -41,6 +43,18 @@ export interface UIText {
   promptRoutingActive: string;
   routingBadgePrefix: string;
   refinedPromptLabel: string;
+
+  // Chat history sidebar
+  newChat: string;
+  chatHistory: string;
+  deleteChat: string;
+  confirmDeleteTitle: string;
+  confirmDeleteMessage: string;
+  cancel: string;
+  today: string;
+  yesterday: string;
+  older: string;
+  untitledChat: string;
 
   // Response type labels (key → localized label)
   responseTypeLabels: Record<string, string>;
@@ -73,6 +87,8 @@ const texts: Record<string, UIText> = {
     inputHint: 'Enter to send · Shift+Enter for newline',
 
     translating: 'Translating…',
+    thinking: 'Thinking…',
+    translatingOutput: 'Translating response…',
     emptyStateSame: 'Both columns show identical content (source = processing language)',
     emptyStateDiff: 'Left: source/target language  ·  Right: processing language',
 
@@ -83,6 +99,17 @@ const texts: Record<string, UIText> = {
     promptRoutingActive: 'Selecting best prompt…',
     routingBadgePrefix: 'Prompt:',
     refinedPromptLabel: 'System Prompt',
+
+    newChat: 'New Chat',
+    chatHistory: 'Chat History',
+    deleteChat: 'Delete',
+    confirmDeleteTitle: 'Delete Conversation',
+    confirmDeleteMessage: 'Are you sure you want to delete this conversation? This action cannot be undone.',
+    cancel: 'Cancel',
+    today: 'Today',
+    yesterday: 'Yesterday',
+    older: 'Older',
+    untitledChat: 'Untitled Chat',
 
     responseTypeLabels: {
       general:     'General — everyday queries',
@@ -119,6 +146,8 @@ const texts: Record<string, UIText> = {
     inputHint: 'Enter 发送 · Shift+Enter 换行',
 
     translating: '翻译中…',
+    thinking: '思考中…',
+    translatingOutput: '正在翻译回复…',
     emptyStateSame: '两列内容相同（源语言与处理语言一致）',
     emptyStateDiff: '左列：原文 / 目标语言  ·  右列：处理语言',
 
@@ -129,6 +158,17 @@ const texts: Record<string, UIText> = {
     promptRoutingActive: '正在选择提示词…',
     routingBadgePrefix: '模板：',
     refinedPromptLabel: '系统提示词',
+
+    newChat: '新对话',
+    chatHistory: '对话记录',
+    deleteChat: '删除',
+    confirmDeleteTitle: '删除对话',
+    confirmDeleteMessage: '确定要删除这个对话吗？此操作无法撤销。',
+    cancel: '取消',
+    today: '今天',
+    yesterday: '昨天',
+    older: '更早',
+    untitledChat: '未命名对话',
 
     responseTypeLabels: {
       general:     '通用 — 日常对话',
@@ -165,6 +205,8 @@ const texts: Record<string, UIText> = {
     inputHint: 'Enter で送信 · Shift+Enter で改行',
 
     translating: '翻訳中…',
+    thinking: '考え中…',
+    translatingOutput: '回答を翻訳中…',
     emptyStateSame: '両列は同じ内容です（ソース言語 = 処理言語）',
     emptyStateDiff: '左列：元の言語  ·  右列：処理言語',
 
@@ -175,6 +217,17 @@ const texts: Record<string, UIText> = {
     promptRoutingActive: 'プロンプトを選択中…',
     routingBadgePrefix: 'テンプレート:',
     refinedPromptLabel: 'システムプロンプト',
+
+    newChat: '新しいチャット',
+    chatHistory: 'チャット履歴',
+    deleteChat: '削除',
+    confirmDeleteTitle: '会話を削除',
+    confirmDeleteMessage: 'この会話を削除しますか？この操作は元に戻せません。',
+    cancel: 'キャンセル',
+    today: '今日',
+    yesterday: '昨日',
+    older: 'それ以前',
+    untitledChat: '無題のチャット',
 
     responseTypeLabels: {
       general:     '一般 — 日常的な質問',
@@ -211,6 +264,8 @@ const texts: Record<string, UIText> = {
     inputHint: 'Enter로 전송 · Shift+Enter로 줄바꿈',
 
     translating: '번역 중…',
+    thinking: '생각 중…',
+    translatingOutput: '응답 번역 중…',
     emptyStateSame: '두 열은 동일한 내용입니다 (소스 언어 = 처리 언어)',
     emptyStateDiff: '왼쪽: 원본 언어  ·  오른쪽: 처리 언어',
 
@@ -221,6 +276,17 @@ const texts: Record<string, UIText> = {
     promptRoutingActive: '프롬프트 선택 중…',
     routingBadgePrefix: '템플릿:',
     refinedPromptLabel: '시스템 프롬프트',
+
+    newChat: '새 대화',
+    chatHistory: '대화 기록',
+    deleteChat: '삭제',
+    confirmDeleteTitle: '대화 삭제',
+    confirmDeleteMessage: '이 대화를 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.',
+    cancel: '취소',
+    today: '오늘',
+    yesterday: '어제',
+    older: '이전',
+    untitledChat: '제목 없는 대화',
 
     responseTypeLabels: {
       general:     '일반 — 일상적인 질문',

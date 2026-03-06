@@ -94,3 +94,17 @@ export interface ChatSettings {
 }
 
 export type ColumnFocus = 'both' | 'left' | 'right';
+
+// Persistent conversation stored in localStorage
+export interface ConversationMeta {
+  id: string;
+  title: string;
+  createdAt: number;   // epoch ms
+  updatedAt: number;
+}
+
+export interface SavedConversation {
+  id: string;
+  turns: ConversationTurn[];
+  history: Array<{ role: 'user' | 'assistant'; content: string }>;
+}

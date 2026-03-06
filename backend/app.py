@@ -123,6 +123,90 @@ async def get_response_types():
         "technical":   "Technical responses with precise terminology",
     }
 
+class GenerateTitleRequest(BaseModel):
+    message: str
+    response: str = ""
+    language: Optional[str] = None  # e.g. "chinese", "japanese" — title language
+    # Per-request API key fields (same as WebSocket payload)
+    deepseek_api_key: Optional[str] = None
+    openai_api_key: Optional[str] = None
+    anthropic_api_key: Optional[str] = None
+    google_api_key: Optional[str] = None
+    qwen_api_key: Optional[str] = None
+    qwen_base_url: Optional[str] = None
+    main_llm_provider: str = "auto"
+    main_llm_model: str = ""
+
+
+def _resolve_llm_for_title(data: dict):
+    """Resolve an LLM client for title generation, reusing _resolve_agents key logic."""
+    keys = {
+        'deepseek': (data.get('deepseek_api_key') or '').strip(),
+        'openai':   (data.get('openai_api_key') or '').strip(),
+        'gpt35':    (data.get('openai_api_key') or '').strip(),
+        'claude':   (data.get('anthropic_api_key') or '').strip(),
+        'gemini':   (data.get('google_api_key') or '').strip(),
+        'qwen':     (data.get('qwen_api_key') or '').strip(),
+    }
+    prov = data.get('main_llm_provider', 'auto')
+    if prov == 'auto':
+        for p in ('deepseek', 'openai', 'claude', 'gemini', 'qwen'):
+            if keys[p]:
+                prov = p
+                break
+        else:
+            prov = None
+    if prov and keys.get(prov):
+        model = (data.get('main_llm_model') or '').strip() or _DEFAULT_MODELS.get(prov, '')
+        extra = {}
+        if prov == 'qwen':
+            base_url = (data.get('qwen_base_url') or '').strip()
+            if base_url:
+                extra['base_url'] = base_url
+        return LLMFactory.create_specific_llm(prov, keys[prov], model, **extra)
+    if orchestrator:
+        return orchestrator.questioner.llm_client
+    return None
+
+
+@app.post("/api/generate-title")
+async def generate_title(req: GenerateTitleRequest):
+    """Generate a short conversation title from the first message + response."""
+    llm = _resolve_llm_for_title(req.model_dump())
+    if not llm:
+        # Fallback: truncate message
+        title = req.message[:40] + ('…' if len(req.message) > 40 else '')
+        return {"title": title}
+
+    lang_instruction = ""
+    if req.language and req.language != "english":
+        lang_instruction = f" The title MUST be written in {req.language}."
+    prompt = (
+        "Generate a concise title (max 6 words) for a conversation that starts with the following exchange. "
+        f"Only output the title text, nothing else. No quotes, no punctuation at the end.{lang_instruction}\n\n"
+        f"User: {req.message[:500]}\n"
+    )
+    if req.response:
+        prompt += f"Assistant: {req.response[:500]}\n"
+
+    try:
+        title = await asyncio.to_thread(
+            llm.invoke,
+            "You generate short, descriptive conversation titles.",
+            prompt,
+            temperature=0.3,
+            max_tokens=30,
+        )
+        title = title.strip().strip('"\'').strip()
+        if not title:
+            title = req.message[:40] + ('…' if len(req.message) > 40 else '')
+        return {"title": title}
+    except Exception as e:
+        logger.warning(f"Title generation failed: {e}")
+        title = req.message[:40] + ('…' if len(req.message) > 40 else '')
+        return {"title": title}
+
+
 # WebSocket for streaming
 class ConnectionManager:
     """Manages WebSocket connections"""

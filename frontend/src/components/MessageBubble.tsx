@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { getT } from '../utils/i18n';
@@ -11,7 +11,79 @@ interface MessageBubbleProps {
   status: BubbleStatus;
   sourceLanguage: string;
   variant?: 'default' | 'processing';
+  statusHint?: string;
 }
+
+// Copy button for code blocks — appears on hover at top-right of <pre>
+const CodeBlockCopyButton: React.FC<{ code: string }> = ({ code }) => {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(code);
+    } catch {
+      const ta = document.createElement('textarea');
+      ta.value = code;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+    }
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  }, [code]);
+
+  return (
+    <button
+      onClick={handleCopy}
+      aria-label="Copy code"
+      className={`absolute bottom-2.5 right-2.5 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-all duration-150 cursor-pointer border ${
+        copied
+          ? 'bg-emerald-500/15 border-emerald-500/25 text-emerald-400'
+          : 'bg-white/[0.06] border-white/[0.10] text-white/40 hover:bg-white/[0.12] hover:text-white/70 hover:border-white/[0.18]'
+      }`}
+    >
+      {copied ? (
+        <>
+          <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+          </svg>
+          Copied
+        </>
+      ) : (
+        <>
+          <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15.666 3.888A2.25 2.25 0 0013.5 2.25h-3c-1.03 0-1.9.693-2.166 1.638m7.332 0c.055.194.084.4.084.612v0a.75.75 0 01-.75.75H9.334a.75.75 0 01-.75-.75v0c0-.212.03-.418.084-.612m7.332 0c.646.049 1.288.11 1.927.184 1.1.128 1.907 1.077 1.907 2.185V19.5a2.25 2.25 0 01-2.25 2.25H6.75A2.25 2.25 0 014.5 19.5V6.257c0-1.108.806-2.057 1.907-2.185a48.208 48.208 0 011.927-.184" />
+          </svg>
+          Copy
+        </>
+      )}
+    </button>
+  );
+};
+
+// Extract plain text from React children tree (for copying code block content)
+const extractText = (node: React.ReactNode): string => {
+  if (typeof node === 'string') return node;
+  if (typeof node === 'number') return String(node);
+  if (!node) return '';
+  if (Array.isArray(node)) return node.map(extractText).join('');
+  if (typeof node === 'object' && 'props' in node) return extractText(node.props.children);
+  return '';
+};
+
+// Custom <pre> renderer with copy button overlay
+const PreWithCopy: React.FC<React.HTMLAttributes<HTMLPreElement>> = ({ children, ...props }) => {
+  const code = extractText(children).replace(/\n$/, '');
+  return (
+    <div className="relative group/codeblock">
+      <pre {...props}>{children}</pre>
+      <CodeBlockCopyButton code={code} />
+    </div>
+  );
+};
 
 // Sparkle icon — signals AI role, no emoji
 const SparkleIcon: React.FC<{ className?: string }> = ({ className }) => (
@@ -26,6 +98,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
   status,
   sourceLanguage,
   variant = 'default',
+  statusHint,
 }) => {
   const isUser       = role === 'user';
   const isProcessing = variant === 'processing';
@@ -50,6 +123,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
 
   // ── Translating / pending skeleton ──────────────────────────────
   if (status === 'pending' || status === 'translating') {
+    const hint = statusHint ?? t.translating;
     if (isUser) {
       const skeletonBg = isProcessing
         ? 'bg-cyan-500/[0.08] border-cyan-500/[0.13]'
@@ -57,7 +131,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
       return (
         <div className="flex justify-end">
           <div className={`${skeletonBg} border rounded-2xl rounded-tr-[6px] px-4 py-2.5 flex items-center gap-2`}>
-            <span className="text-[12px] text-white/28 tracking-wide">{t.translating}</span>
+            <span className="text-[12px] text-white/28 tracking-wide">{hint}</span>
             <div className="translating-skeleton w-14 rounded-full" />
           </div>
         </div>
@@ -68,7 +142,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
       <div className="flex items-start gap-2.5">
         {AIBadge}
         <div className="flex items-center gap-2 pt-[1px]">
-          <span className="text-[12px] text-white/28 tracking-wide">{t.translating}</span>
+          <span className="text-[12px] text-white/28 tracking-wide">{hint}</span>
           <div className="translating-skeleton w-20 rounded-full" />
         </div>
       </div>
@@ -108,7 +182,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
         }`}
       >
         <div className="markdown-body">
-          <ReactMarkdown remarkPlugins={[remarkGfm]}>
+          <ReactMarkdown remarkPlugins={[remarkGfm]} components={{ pre: PreWithCopy }}>
             {content || (status === 'streaming' ? '\u200b' : '')}
           </ReactMarkdown>
         </div>

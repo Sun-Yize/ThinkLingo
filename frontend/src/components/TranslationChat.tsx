@@ -1,9 +1,10 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { ConversationTurn, WebSocketMessage, Language, ResponseType, ChatSettings } from '../types/chat';
+import { ConversationTurn, WebSocketMessage, Language, ResponseType, ChatSettings, ConversationMeta, SavedConversation } from '../types/chat';
 import { getT } from '../utils/i18n';
 import DualColumnView from './DualColumnView';
 import SettingsModal from './SettingsModal';
 import ApiConfigModal from './ApiConfigModal';
+import ChatHistory from './ChatHistory';
 import InputBar from './InputBar';
 
 const NATIVE_NAMES: Record<string, string> = {
@@ -12,6 +13,10 @@ const NATIVE_NAMES: Record<string, string> = {
   japanese: '日本語',
   korean:   '한국어',
 };
+
+const MAX_CONVERSATIONS = 50;
+const STORAGE_INDEX_KEY = 'thinklingo_conv_index';
+const STORAGE_CONV_PREFIX = 'thinklingo_conv_';
 
 const DEFAULT_SETTINGS: ChatSettings = {
   sourceLanguage:          'chinese',
@@ -25,6 +30,19 @@ const DEFAULT_SETTINGS: ChatSettings = {
   qwenRegion:              'cn',
 };
 
+interface StreamContext {
+  convId: string;
+  rightUserAccumulator: string;
+  rightAiAccumulator: string;
+  leftAiAccumulator: string;
+  refinedPromptAccumulator: string;
+  pendingEnglishInput: string;
+  // null = foreground (React state is source of truth)
+  // non-null = background snapshot
+  turns: ConversationTurn[] | null;
+  history: Array<{ role: 'user' | 'assistant'; content: string }> | null;
+}
+
 function loadSettings(): ChatSettings {
   try {
     const stored = localStorage.getItem('thinklingo_settings');
@@ -33,8 +51,6 @@ function loadSettings(): ChatSettings {
       return {
         ...DEFAULT_SETTINGS,
         ...parsed,
-        // Deep-merge apiKeys so new provider defaults aren't lost when
-        // upgrading from older localStorage that only had deepseek/openai.
         apiKeys:        { ...DEFAULT_SETTINGS.apiKeys,        ...(parsed.apiKeys        ?? {}) },
         mainLlm:        { ...DEFAULT_SETTINGS.mainLlm,        ...(parsed.mainLlm        ?? {}) },
         translationLlm: { ...DEFAULT_SETTINGS.translationLlm, ...(parsed.translationLlm ?? {}) },
@@ -44,26 +60,75 @@ function loadSettings(): ChatSettings {
   return DEFAULT_SETTINGS;
 }
 
+// ── localStorage helpers for conversations ──────────────────────────
+
+function loadConvIndex(): ConversationMeta[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_INDEX_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch { /* ignore */ }
+  return [];
+}
+
+function saveConvIndex(index: ConversationMeta[]) {
+  localStorage.setItem(STORAGE_INDEX_KEY, JSON.stringify(index));
+}
+
+function loadConvData(id: string): SavedConversation | null {
+  try {
+    const raw = localStorage.getItem(STORAGE_CONV_PREFIX + id);
+    if (raw) return JSON.parse(raw);
+  } catch { /* ignore */ }
+  return null;
+}
+
+function saveConvData(conv: SavedConversation) {
+  localStorage.setItem(STORAGE_CONV_PREFIX + conv.id, JSON.stringify(conv));
+}
+
+function deleteConvData(id: string) {
+  localStorage.removeItem(STORAGE_CONV_PREFIX + id);
+}
+
+function generateId(): string {
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+// ─────────────────────────────────────────────────────────────────────
+
 const TranslationChat: React.FC = () => {
   const [turns, setTurns]               = useState<ConversationTurn[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [settingsOpen, setSettingsOpen]     = useState(false);
   const [apiConfigOpen, setApiConfigOpen]   = useState(false);
+  const [historyOpen, setHistoryOpen]       = useState(false);
   const [settings, setSettings]         = useState<ChatSettings>(loadSettings);
   const [languages, setLanguages]       = useState<Language[]>([]);
   const [responseTypes, setResponseTypes] = useState<ResponseType[]>([]);
   const [allowUserApiKeys, setAllowUserApiKeys] = useState(false);
+
+  // Conversation management
+  const [convIndex, setConvIndex]   = useState<ConversationMeta[]>(loadConvIndex);
+  const [activeConvId, setActiveConvId] = useState<string | null>(null);
 
   const wsRef              = useRef<WebSocket | null>(null);
   const isMountedRef       = useRef(true);
   const handleWsMessageRef = useRef<(msg: WebSocketMessage) => void>(() => {});
 
   const conversationHistoryRef  = useRef<Array<{ role: 'user' | 'assistant'; content: string }>>([]);
-  const pendingEnglishInputRef      = useRef('');
-  const rightUserAccumulatorRef     = useRef('');
-  const rightAiAccumulatorRef       = useRef('');
-  const leftAiAccumulatorRef        = useRef('');
-  const refinedPromptAccumulatorRef = useRef('');
+
+  // ── Stream queue ────────────────────────────────────────────────
+  // Each entry owns accumulators + optional background snapshots.
+  // The backend processes requests serially, so tokens arrive FIFO.
+  const streamQueueRef = useRef<StreamContext[]>([]);
+
+  // Refs to latest state for use in save callback
+  const turnsRef    = useRef(turns);
+  const convIdRef   = useRef(activeConvId);
+  const convIndexRef = useRef(convIndex);
+  turnsRef.current    = turns;
+  convIdRef.current   = activeConvId;
+  convIndexRef.current = convIndex;
 
   useEffect(() => {
     handleWsMessageRef.current = handleWebSocketMessage;
@@ -74,6 +139,13 @@ const TranslationChat: React.FC = () => {
     loadResponseTypes();
     loadAppConfig();
     connectWebSocket();
+
+    // Load the most recent conversation if one exists
+    const index = loadConvIndex();
+    if (index.length > 0) {
+      loadConversation(index[0].id);
+    }
+
     return () => {
       isMountedRef.current = false;
       wsRef.current?.close();
@@ -84,6 +156,198 @@ const TranslationChat: React.FC = () => {
   useEffect(() => {
     localStorage.setItem('thinklingo_settings', JSON.stringify(settings));
   }, [settings]);
+
+  // Persist conversation index whenever it changes
+  useEffect(() => {
+    saveConvIndex(convIndex);
+  }, [convIndex]);
+
+
+  // ── Save current conversation data when turns or history change ────
+  const saveCurrentConversation = useCallback(() => {
+    const id = convIdRef.current;
+    if (!id) return;
+    // Only save turns that are complete or errored (skip mid-stream)
+    saveConvData({
+      id,
+      turns: turnsRef.current,
+      history: conversationHistoryRef.current,
+    });
+  }, []);
+
+  // Save on turns change (debounced slightly — fires after streaming completes)
+  useEffect(() => {
+    if (!activeConvId) return;
+    const timer = setTimeout(saveCurrentConversation, 300);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [turns, activeConvId]);
+
+  // ── Conversation CRUD ─────────────────────────────────────────────
+
+  const loadConversation = (id: string) => {
+    const data = loadConvData(id);
+    if (data) {
+      setTurns(data.turns);
+      conversationHistoryRef.current = data.history;
+    } else {
+      setTurns([]);
+      conversationHistoryRef.current = [];
+    }
+    setActiveConvId(id);
+  };
+
+  const snapshotActiveStreams = () => {
+    // Move any foreground streams for the current conv to background
+    const curId = convIdRef.current;
+    for (const ctx of streamQueueRef.current) {
+      if (ctx.convId === curId && ctx.turns === null) {
+        ctx.turns = [...turnsRef.current];
+        ctx.history = [...conversationHistoryRef.current];
+      }
+    }
+  };
+
+  const createNewConversation = () => {
+    const hasActiveStream = streamQueueRef.current.some(
+      ctx => ctx.convId === activeConvId
+    );
+    if (hasActiveStream) {
+      snapshotActiveStreams();
+    } else {
+      saveCurrentConversation();
+    }
+
+    const id = generateId();
+    const now = Date.now();
+    const meta: ConversationMeta = {
+      id,
+      title: '',
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    setConvIndex(prev => [meta, ...prev].slice(0, MAX_CONVERSATIONS));
+    setTurns([]);
+    conversationHistoryRef.current = [];
+    setActiveConvId(id);
+    setIsProcessing(false);
+  };
+
+  const switchConversation = (id: string) => {
+    if (id === activeConvId) return;
+
+    // Snapshot any foreground streams for the conv we're leaving
+    const hasActiveStream = streamQueueRef.current.some(
+      ctx => ctx.convId === activeConvId
+    );
+    if (hasActiveStream) {
+      snapshotActiveStreams();
+    } else {
+      saveCurrentConversation();
+    }
+
+    // Check if the target conv has a background stream we can restore
+    const targetStream = streamQueueRef.current.find(
+      ctx => ctx.convId === id && ctx.turns !== null
+    );
+    if (targetStream) {
+      // Promote background stream back to foreground
+      setTurns(targetStream.turns!);
+      conversationHistoryRef.current = targetStream.history ?? [];
+      targetStream.turns = null;
+      targetStream.history = null;
+      setActiveConvId(id);
+      // Processing if the queue head is this conv
+      const head = getActiveStream();
+      setIsProcessing(head !== null && head.convId === id);
+    } else {
+      loadConversation(id);
+      setIsProcessing(false);
+    }
+  };
+
+  const deleteConversation = (id: string) => {
+    // Remove any queued streams for this conv (tokens will be silently discarded)
+    streamQueueRef.current = streamQueueRef.current.filter(ctx => ctx.convId !== id);
+    deleteConvData(id);
+    setConvIndex(prev => prev.filter(c => c.id !== id));
+    if (id === activeConvId) {
+      // Switch to next conversation or create new
+      const remaining = convIndexRef.current.filter(c => c.id !== id);
+      if (remaining.length > 0) {
+        loadConversation(remaining[0].id);
+      } else {
+        createNewConversation();
+      }
+    }
+  };
+
+  // ── Update conversation title (move to top + set timestamp) ─────
+  const touchConvTimestamp = () => {
+    const id = convIdRef.current;
+    if (!id) return;
+    setConvIndex(prev => {
+      const idx = prev.findIndex(c => c.id === id);
+      if (idx === -1) return prev;
+      const updated = { ...prev[idx], updatedAt: Date.now() };
+      const rest = prev.filter((_, i) => i !== idx);
+      return [updated, ...rest];
+    });
+  };
+
+  // ── LLM-generated conversation title ──────────────────────────────
+  const generateConvTitle = async (message: string, response: string, language?: string, overrideId?: string) => {
+    const id = overrideId ?? convIdRef.current;
+    if (!id) return;
+    // Only generate title for the first turn
+    const conv = convIndexRef.current.find(c => c.id === id);
+    if (conv?.title) return;
+
+    try {
+      const res = await fetch('/api/generate-title', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: message,
+          response: response,
+          language: language,
+          deepseek_api_key:   settings.apiKeys.deepseek,
+          openai_api_key:     settings.apiKeys.openai,
+          anthropic_api_key:  settings.apiKeys.anthropic,
+          google_api_key:     settings.apiKeys.google,
+          qwen_api_key:       settings.apiKeys.qwen,
+          qwen_base_url:      settings.qwenRegion === 'cn'
+            ? 'https://dashscope.aliyuncs.com/compatible-mode/v1'
+            : 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1',
+          main_llm_provider:  settings.mainLlm.provider,
+          main_llm_model:     settings.mainLlm.model,
+        }),
+      });
+      const data = await res.json();
+      if (data.title) {
+        setConvIndex(prev => {
+          const idx = prev.findIndex(c => c.id === id);
+          if (idx === -1 || prev[idx].title) return prev;
+          const updated = { ...prev[idx], title: data.title, updatedAt: Date.now() };
+          const rest = prev.filter((_, i) => i !== idx);
+          return [updated, ...rest];
+        });
+      }
+    } catch {
+      // Fallback: use truncated message as title
+      setConvIndex(prev => {
+        const idx = prev.findIndex(c => c.id === id);
+        if (idx === -1 || prev[idx].title) return prev;
+        const title = message.slice(0, 40) + (message.length > 40 ? '…' : '');
+        const updated = { ...prev[idx], title, updatedAt: Date.now() };
+        const rest = prev.filter((_, i) => i !== idx);
+        return [updated, ...rest];
+      });
+    }
+  };
+
+  // ── API / WS setup (unchanged) ────────────────────────────────────
 
   const loadLanguages = async () => {
     try {
@@ -136,8 +400,6 @@ const TranslationChat: React.FC = () => {
 
   const connectWebSocket = useCallback(() => {
     const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    // In development, connect directly to the backend port to bypass CRA's
-    // WebSocket proxy limitations. In production, nginx routes /ws/ correctly.
     const isDev = process.env.NODE_ENV === 'development';
     const wsHost = isDev ? `${window.location.hostname}:8000` : window.location.host;
     const wsUrl = `${wsProtocol}//${wsHost}/ws/chat`;
@@ -155,91 +417,143 @@ const TranslationChat: React.FC = () => {
     wsRef.current.onerror = (err) => console.error('WebSocket error:', err);
   }, []);
 
-  const updateLastTurn = (patch: Partial<ConversationTurn>) => {
-    setTurns(prev => {
-      if (prev.length === 0) return prev;
-      const next = [...prev];
-      next[next.length - 1] = { ...next[next.length - 1], ...patch };
-      return next;
-    });
+  const getActiveStream = (): StreamContext | null => streamQueueRef.current[0] ?? null;
+
+  const isBackgroundStream = (ctx: StreamContext) =>
+    ctx.convId !== convIdRef.current;
+
+  const updateLastTurn = (ctx: StreamContext, patch: Partial<ConversationTurn>) => {
+    if (isBackgroundStream(ctx)) {
+      const bg = ctx.turns;
+      if (bg && bg.length > 0) {
+        bg[bg.length - 1] = { ...bg[bg.length - 1], ...patch };
+      }
+    } else {
+      setTurns(prev => {
+        if (prev.length === 0) return prev;
+        const next = [...prev];
+        next[next.length - 1] = { ...next[next.length - 1], ...patch };
+        return next;
+      });
+    }
+  };
+
+  /** When a stream completes, shift it off the queue and promote next if needed. */
+  const finalizeStream = (ctx: StreamContext) => {
+    const isBg = isBackgroundStream(ctx);
+
+    if (isBg) {
+      // Save background conversation to localStorage
+      saveConvData({ id: ctx.convId, turns: ctx.turns ?? [], history: ctx.history ?? [] });
+      const bgTurns = ctx.turns ?? [];
+      if (bgTurns.length === 1) {
+        const turn = bgTurns[0];
+        generateConvTitle(turn.leftUser, turn.rightAi, turn.sourceLanguage, ctx.convId);
+      }
+    } else {
+      setIsProcessing(false);
+      const currentTurns = turnsRef.current;
+      if (currentTurns.length === 1) {
+        const turn = currentTurns[0];
+        generateConvTitle(turn.leftUser, turn.rightAi, turn.sourceLanguage);
+      }
+    }
+
+    // Remove completed stream from queue
+    streamQueueRef.current = streamQueueRef.current.filter(s => s !== ctx);
+
+    // If the next stream in queue belongs to the foreground, mark processing
+    const next = getActiveStream();
+    if (next && !isBackgroundStream(next)) {
+      setIsProcessing(true);
+    }
   };
 
   const handleWebSocketMessage = (msg: WebSocketMessage) => {
+    const ctx = getActiveStream();
+    if (!ctx) return;
+
     switch (msg.type) {
       case 'input_translation_chunk':
-        rightUserAccumulatorRef.current += msg.content;
-        updateLastTurn({ rightUser: rightUserAccumulatorRef.current, rightUserStatus: 'streaming' });
+        ctx.rightUserAccumulator += msg.content;
+        updateLastTurn(ctx, { rightUser: ctx.rightUserAccumulator, rightUserStatus: 'streaming' });
         break;
 
       case 'translation_complete':
         if (msg.step === 'input_translation') {
-          pendingEnglishInputRef.current = msg.content;
-          updateLastTurn({ rightUser: msg.content, rightUserStatus: 'complete' });
+          ctx.pendingEnglishInput = msg.content;
+          updateLastTurn(ctx, { rightUser: msg.content, rightUserStatus: 'complete' });
         }
         break;
 
       case 'processing_start':
-        rightAiAccumulatorRef.current = '';
-        updateLastTurn({ rightAiStatus: 'streaming' });
+        ctx.rightAiAccumulator = '';
+        updateLastTurn(ctx, { rightAiStatus: 'streaming' });
         break;
 
       case 'processing_chunk':
-        rightAiAccumulatorRef.current += msg.content;
-        updateLastTurn({ rightAi: rightAiAccumulatorRef.current, rightAiStatus: 'streaming' });
+        ctx.rightAiAccumulator += msg.content;
+        updateLastTurn(ctx, { rightAi: ctx.rightAiAccumulator, rightAiStatus: 'streaming' });
         break;
 
-      case 'processing_complete':
-        conversationHistoryRef.current = [
-          ...conversationHistoryRef.current,
-          { role: 'user',      content: pendingEnglishInputRef.current },
-          { role: 'assistant', content: msg.content },
+      case 'processing_complete': {
+        const newEntries = [
+          { role: 'user' as const,      content: ctx.pendingEnglishInput },
+          { role: 'assistant' as const, content: msg.content },
         ];
-        updateLastTurn({ rightAi: msg.content, rightAiStatus: 'complete' });
+        if (isBackgroundStream(ctx)) {
+          ctx.history = [...(ctx.history ?? []), ...newEntries];
+        } else {
+          conversationHistoryRef.current = [...conversationHistoryRef.current, ...newEntries];
+        }
+        updateLastTurn(ctx, { rightAi: msg.content, rightAiStatus: 'complete' });
         break;
+      }
 
       case 'output_translation_chunk':
-        leftAiAccumulatorRef.current += msg.content;
-        updateLastTurn({ leftAi: leftAiAccumulatorRef.current, leftAiStatus: 'streaming' });
+        ctx.leftAiAccumulator += msg.content;
+        updateLastTurn(ctx, { leftAi: ctx.leftAiAccumulator, leftAiStatus: 'streaming' });
         break;
 
-      case 'final_translation':
+      case 'final_translation': {
         if (msg.metadata?.skipped) {
-          updateLastTurn({ leftAi: msg.content, leftAiStatus: 'complete', status: 'complete' });
-        } else if (leftAiAccumulatorRef.current) {
-          updateLastTurn({ leftAiStatus: 'complete', status: 'complete' });
+          updateLastTurn(ctx, { leftAi: msg.content, leftAiStatus: 'complete', status: 'complete' });
+        } else if (ctx.leftAiAccumulator) {
+          updateLastTurn(ctx, { leftAiStatus: 'complete', status: 'complete' });
         } else {
-          updateLastTurn({ leftAi: msg.content, leftAiStatus: 'complete', status: 'complete' });
+          updateLastTurn(ctx, { leftAi: msg.content, leftAiStatus: 'complete', status: 'complete' });
         }
-        setIsProcessing(false);
+        finalizeStream(ctx);
         break;
+      }
 
       case 'prompt_routing_start':
         break;
 
       case 'prompt_routing_label':
-        updateLastTurn({
+        updateLastTurn(ctx, {
           routingLabel: msg.metadata?.template_label ?? msg.content,
         });
         break;
 
       case 'prompt_routing_chunk':
-        refinedPromptAccumulatorRef.current += msg.content;
-        updateLastTurn({
-          refinedPrompt:       refinedPromptAccumulatorRef.current,
+        ctx.refinedPromptAccumulator += msg.content;
+        updateLastTurn(ctx, {
+          refinedPrompt:       ctx.refinedPromptAccumulator,
           refinedPromptStatus: 'streaming',
         });
         break;
 
       case 'prompt_routing_complete':
-        updateLastTurn({
+        updateLastTurn(ctx, {
           refinedPrompt:       msg.content,
           refinedPromptStatus: 'complete',
         });
         break;
 
       case 'error':
-        updateLastTurn({ status: 'error', error: msg.content, leftAiStatus: 'complete', rightAiStatus: 'complete' });
-        setIsProcessing(false);
+        updateLastTurn(ctx, { status: 'error', error: msg.content, leftAiStatus: 'complete', rightAiStatus: 'complete' });
+        finalizeStream(ctx);
         break;
 
       default:
@@ -253,10 +567,31 @@ const TranslationChat: React.FC = () => {
       return;
     }
 
-    rightUserAccumulatorRef.current     = '';
-    rightAiAccumulatorRef.current       = '';
-    leftAiAccumulatorRef.current        = '';
-    refinedPromptAccumulatorRef.current = '';
+    // Auto-create a conversation if none is active
+    if (!activeConvId) {
+      const id = generateId();
+      const now = Date.now();
+      const meta: ConversationMeta = { id, title: '', createdAt: now, updatedAt: now };
+      setConvIndex(prev => [meta, ...prev].slice(0, MAX_CONVERSATIONS));
+      setActiveConvId(id);
+      convIdRef.current = id;
+    }
+
+    // Move conversation to top of list
+    touchConvTimestamp();
+
+    // Push a new stream context onto the queue
+    const streamCtx: StreamContext = {
+      convId: convIdRef.current!,
+      rightUserAccumulator: '',
+      rightAiAccumulator: '',
+      leftAiAccumulator: '',
+      refinedPromptAccumulator: '',
+      pendingEnglishInput: '',
+      turns: null,   // foreground — React state is source of truth
+      history: null,
+    };
+    streamQueueRef.current.push(streamCtx);
 
     const newTurn: ConversationTurn = {
       id:                `${Date.now()}-${Math.random()}`,
@@ -306,7 +641,7 @@ const TranslationChat: React.FC = () => {
 
   return (
     <div
-      className="h-screen flex flex-col overflow-hidden"
+      className="h-screen flex overflow-hidden"
       style={{
         background: '#0B0B14',
         backgroundImage:
@@ -314,9 +649,36 @@ const TranslationChat: React.FC = () => {
           'radial-gradient(ellipse at 82% 88%, rgba(6,182,212,0.12) 0%, transparent 50%)',
       }}
     >
+      {/* ── Sidebar (inline, always pinned when open) ─────────────── */}
+      <ChatHistory
+        isOpen={historyOpen}
+        onClose={() => setHistoryOpen(false)}
+        conversations={convIndex}
+        activeId={activeConvId}
+        onSelect={switchConversation}
+        onNew={createNewConversation}
+        onDelete={deleteConversation}
+        t={t}
+      />
+
+      {/* ── Main content column ──────────────────────────────────── */}
+      <div className="flex-1 flex flex-col overflow-hidden min-w-0">
       {/* ── Fixed header ──────────────────────────────────────────── */}
       <header className="relative flex-shrink-0 flex items-center justify-between px-6 h-[58px] bg-[rgba(11,11,20,0.82)] backdrop-blur-xl">
         <div className="flex items-center gap-3">
+          {/* History toggle button */}
+          <button
+            onClick={() => setHistoryOpen(prev => !prev)}
+            aria-label={t.chatHistory}
+            className={`flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-lg transition-all duration-200 cursor-pointer ${
+              historyOpen ? 'text-violet-400/70 bg-violet-500/[0.10]' : 'text-white/35 hover:text-white/75 hover:bg-white/[0.06]'
+            }`}
+          >
+            <svg className="w-[18px] h-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5"/>
+            </svg>
+          </button>
+
           {/* Logo mark with glow halo */}
           <div className="relative flex-shrink-0 w-8 h-8">
             <div className="absolute inset-0 rounded-[10px] bg-gradient-to-br from-violet-500 to-cyan-500 blur-[7px] opacity-55" />
@@ -384,6 +746,7 @@ const TranslationChat: React.FC = () => {
 
       {/* ── Input bar ─────────────────────────────────────────────── */}
       <InputBar onSend={handleSend} disabled={isProcessing} sourceLanguage={settings.sourceLanguage} />
+      </div>{/* end main content column */}
 
       {/* ── Settings modal ────────────────────────────────────────── */}
       <SettingsModal
