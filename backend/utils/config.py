@@ -81,7 +81,7 @@ class Config:
         self.default_temperature = default_temperature or float(os.getenv("DEFAULT_TEMPERATURE", "0.7"))
         self.max_tokens = max_tokens or int(os.getenv("MAX_TOKENS", "4000"))
         self.cors_origins = cors_origins or os.getenv("CORS_ORIGINS", "http://localhost:3000")
-        self.max_workers = max_workers or int(os.getenv("MAX_WORKERS", "20"))
+        self.max_workers = max_workers or int(os.getenv("MAX_WORKERS", "40"))
         self.max_history_turns = max_history_turns or int(os.getenv("MAX_HISTORY_TURNS", "20"))
 
         # Validate configuration
@@ -220,6 +220,6 @@ class Config:
             default_temperature=float(os.getenv("DEFAULT_TEMPERATURE", "0.7")),
             max_tokens=int(os.getenv("MAX_TOKENS", "4000")),
             cors_origins=os.getenv("CORS_ORIGINS", "http://localhost:3000"),
-            max_workers=int(os.getenv("MAX_WORKERS", "20")),
+            max_workers=int(os.getenv("MAX_WORKERS", "40")),
             max_history_turns=int(os.getenv("MAX_HISTORY_TURNS", "20")),
         )

@@ -46,4 +46,9 @@ Thumbs.db
 # Logs
 *.log
 
+# SSL certificates / private keys
+nginx/ssl/
+*.pem
+*.key
+
 node_modules

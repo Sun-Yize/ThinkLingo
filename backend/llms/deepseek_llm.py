@@ -81,8 +81,8 @@ class DeepSeekLLM(BaseLLM):
                 return ""
 
         except Exception as e:
-            logger.error(f"DeepSeek API call error: {str(e)}")
-            raise e
+            logger.error(f"DeepSeek API call error: {type(e).__name__}")
+            raise
 
     def invoke_stream(self, system_prompt: str, user_prompt: str, messages: Optional[list] = None, **kwargs) -> Generator[str, None, None]:
         """

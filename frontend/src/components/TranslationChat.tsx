@@ -14,6 +14,12 @@ const NATIVE_NAMES: Record<string, string> = {
   korean:   '한국어',
 };
 
+// Optional auth token — set via REACT_APP_AUTH_TOKEN env var at build time
+const AUTH_TOKEN = process.env.REACT_APP_AUTH_TOKEN || '';
+
+const _authHeaders = (): Record<string, string> =>
+  AUTH_TOKEN ? { Authorization: `Bearer ${AUTH_TOKEN}` } : {};
+
 const MAX_CONVERSATIONS = 50;
 const STORAGE_INDEX_KEY = 'thinklingo_conv_index';
 const STORAGE_CONV_PREFIX = 'thinklingo_conv_';
@@ -43,19 +49,38 @@ interface StreamContext {
   history: Array<{ role: 'user' | 'assistant'; content: string }> | null;
 }
 
+const SETTINGS_KEY = 'thinklingo_settings';
+const API_KEYS_SESSION_KEY = 'thinklingo_api_keys';
+
 function loadSettings(): ChatSettings {
   try {
-    const stored = localStorage.getItem('thinklingo_settings');
-    if (stored) {
-      const parsed = JSON.parse(stored);
-      return {
-        ...DEFAULT_SETTINGS,
-        ...parsed,
-        apiKeys:        { ...DEFAULT_SETTINGS.apiKeys,        ...(parsed.apiKeys        ?? {}) },
-        mainLlm:        { ...DEFAULT_SETTINGS.mainLlm,        ...(parsed.mainLlm        ?? {}) },
-        translationLlm: { ...DEFAULT_SETTINGS.translationLlm, ...(parsed.translationLlm ?? {}) },
-      };
-    }
+    const stored = localStorage.getItem(SETTINGS_KEY);
+    const base = stored ? JSON.parse(stored) : {};
+
+    // API keys live in sessionStorage (cleared on tab close) for security.
+    // Migrate: if keys still exist in localStorage, move them to sessionStorage once.
+    let apiKeys = DEFAULT_SETTINGS.apiKeys;
+    try {
+      const sessionKeys = sessionStorage.getItem(API_KEYS_SESSION_KEY);
+      if (sessionKeys) {
+        apiKeys = { ...apiKeys, ...JSON.parse(sessionKeys) };
+      } else if (base.apiKeys) {
+        // One-time migration from localStorage → sessionStorage
+        apiKeys = { ...apiKeys, ...base.apiKeys };
+        sessionStorage.setItem(API_KEYS_SESSION_KEY, JSON.stringify(apiKeys));
+        // Remove migrated keys from localStorage
+        const { apiKeys: _, ...cleanBase } = base;
+        localStorage.setItem(SETTINGS_KEY, JSON.stringify(cleanBase));
+      }
+    } catch { /* ignore */ }
+
+    return {
+      ...DEFAULT_SETTINGS,
+      ...base,
+      apiKeys,
+      mainLlm:        { ...DEFAULT_SETTINGS.mainLlm,        ...(base.mainLlm        ?? {}) },
+      translationLlm: { ...DEFAULT_SETTINGS.translationLlm, ...(base.translationLlm ?? {}) },
+    };
   } catch { /* ignore */ }
   return DEFAULT_SETTINGS;
 }
@@ -154,7 +179,11 @@ const TranslationChat: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    localStorage.setItem('thinklingo_settings', JSON.stringify(settings));
+    // Save non-sensitive settings to localStorage (persists across sessions)
+    const { apiKeys, ...safeSettings } = settings;
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify(safeSettings));
+    // Save API keys to sessionStorage only (cleared when tab closes)
+    sessionStorage.setItem(API_KEYS_SESSION_KEY, JSON.stringify(apiKeys));
   }, [settings]);
 
   // Persist conversation index whenever it changes
@@ -307,7 +336,7 @@ const TranslationChat: React.FC = () => {
     try {
       const res = await fetch('/api/generate-title', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ..._authHeaders() },
         body: JSON.stringify({
           message: message,
           response: response,
@@ -351,7 +380,7 @@ const TranslationChat: React.FC = () => {
 
   const loadLanguages = async () => {
     try {
-      const res  = await fetch('/api/languages');
+      const res  = await fetch('/api/languages', { headers: _authHeaders() });
       const data = await res.json();
       setLanguages(data.map((l: any) => ({
         key:         l.key,
@@ -372,7 +401,7 @@ const TranslationChat: React.FC = () => {
 
   const loadResponseTypes = async () => {
     try {
-      const res  = await fetch('/api/response-types');
+      const res  = await fetch('/api/response-types', { headers: _authHeaders() });
       const data = await res.json();
       setResponseTypes(
         Object.entries(data).map(([key, description]) => ({ key, description: description as string }))
@@ -390,7 +419,7 @@ const TranslationChat: React.FC = () => {
 
   const loadAppConfig = async () => {
     try {
-      const res  = await fetch('/api/config');
+      const res  = await fetch('/api/config', { headers: _authHeaders() });
       const data = await res.json();
       setAllowUserApiKeys(!!data.allow_user_api_keys);
     } catch {
@@ -402,7 +431,7 @@ const TranslationChat: React.FC = () => {
     const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const isDev = process.env.NODE_ENV === 'development';
     const wsHost = isDev ? `${window.location.hostname}:8000` : window.location.host;
-    const wsUrl = `${wsProtocol}//${wsHost}/ws/chat`;
+    const wsUrl = `${wsProtocol}//${wsHost}/ws/chat${AUTH_TOKEN ? `?token=${encodeURIComponent(AUTH_TOKEN)}` : ''}`;
 
     wsRef.current = new WebSocket(wsUrl);
     wsRef.current.onopen    = () => console.log('WebSocket connected');

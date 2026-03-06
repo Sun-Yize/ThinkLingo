@@ -7,13 +7,18 @@ import logging
 import os
 import asyncio
 import json
+import time
+import threading
+from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 from typing import Optional, Dict, Any
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
+from starlette.status import WS_1008_POLICY_VIOLATION
 
 # Configure logging
 logging.basicConfig(
@@ -32,8 +37,58 @@ import re
 
 from backend.prompt_router import PromptRouter, TemplateRegistry
 
+# --- Security: SSRF prevention — only these Qwen base URLs are permitted ---
+_ALLOWED_QWEN_BASE_URLS = {
+    "https://dashscope.aliyuncs.com/compatible-mode/v1",
+    "https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
+}
+
+# --- Security: Optional authentication via AUTH_TOKEN env var ---
+_AUTH_TOKEN = os.getenv("AUTH_TOKEN", "").strip()
+_http_bearer = HTTPBearer(auto_error=False)
+
+
+def _sanitize_error(exc: Exception) -> str:
+    """Return a generic error message, stripping any sensitive details (API keys, headers, URLs)."""
+    # Never forward raw exception strings — they may contain credentials
+    exc_type = type(exc).__name__
+    safe_types = {
+        "ValueError": "Invalid input or configuration",
+        "ConnectionError": "Failed to connect to upstream service",
+        "TimeoutError": "Request timed out",
+        "Timeout": "Request timed out",
+    }
+    return safe_types.get(exc_type, "An internal error occurred. Please try again.")
+
+
+def _validate_qwen_base_url(url: Optional[str]) -> Optional[str]:
+    """Validate that a user-supplied Qwen base URL is on the allowlist. Returns the URL or None."""
+    if not url:
+        return None
+    url = url.strip().rstrip("/")
+    for allowed in _ALLOWED_QWEN_BASE_URLS:
+        if url == allowed.rstrip("/"):
+            return url
+    logger.warning(f"Rejected disallowed qwen_base_url: {url!r}")
+    return None
+
+
+async def _verify_auth_token(credentials: Optional[HTTPAuthorizationCredentials] = Depends(_http_bearer)):
+    """Dependency that enforces AUTH_TOKEN when configured."""
+    if not _AUTH_TOKEN:
+        return  # auth disabled
+    if credentials is None or credentials.credentials != _AUTH_TOKEN:
+        raise HTTPException(status_code=401, detail="Invalid or missing authentication token")
+
+
 # Bounded thread pool — avoids unbounded resource consumption under load
-_executor = ThreadPoolExecutor(max_workers=int(os.getenv("MAX_WORKERS", "20")))
+_executor = ThreadPoolExecutor(max_workers=int(os.getenv("MAX_WORKERS", "40")))
+
+# Concurrency limits
+_MAX_CONNECTIONS = int(os.getenv("MAX_WS_CONNECTIONS", "200"))
+_MAX_CONNECTIONS_PER_IP = int(os.getenv("MAX_WS_CONNECTIONS_PER_IP", "5"))
+_STREAM_QUEUE_MAXSIZE = 2000  # backpressure: max buffered tokens per stream
+_WS_RATE_LIMIT_PER_SEC = int(os.getenv("WS_RATE_LIMIT_PER_SEC", "5"))  # max messages per second per connection
 
 # Global orchestrator instance
 orchestrator = None
@@ -87,7 +142,7 @@ class StreamingMessage(BaseModel):
     metadata: Optional[Dict[str, Any]] = None
 
 # REST API Endpoints
-@app.get("/api/config")
+@app.get("/api/config", dependencies=[Depends(_verify_auth_token)])
 async def get_app_config():
     """Return feature flags for the frontend"""
     return {
@@ -160,7 +215,7 @@ def _resolve_llm_for_title(data: dict):
         model = (data.get('main_llm_model') or '').strip() or _DEFAULT_MODELS.get(prov, '')
         extra = {}
         if prov == 'qwen':
-            base_url = (data.get('qwen_base_url') or '').strip()
+            base_url = _validate_qwen_base_url(data.get('qwen_base_url'))
             if base_url:
                 extra['base_url'] = base_url
         return LLMFactory.create_specific_llm(prov, keys[prov], model, **extra)
@@ -169,7 +224,7 @@ def _resolve_llm_for_title(data: dict):
     return None
 
 
-@app.post("/api/generate-title")
+@app.post("/api/generate-title", dependencies=[Depends(_verify_auth_token)])
 async def generate_title(req: GenerateTitleRequest):
     """Generate a short conversation title from the first message + response."""
     llm = _resolve_llm_for_title(req.model_dump())
@@ -209,36 +264,95 @@ async def generate_title(req: GenerateTitleRequest):
 
 # WebSocket for streaming
 class ConnectionManager:
-    """Manages WebSocket connections"""
+    """Manages WebSocket connections with total and per-IP limits"""
 
-    def __init__(self):
+    def __init__(self, max_total: int, max_per_ip: int):
         self.active_connections: list[WebSocket] = []
+        self._ip_counts: Dict[str, int] = defaultdict(int)
+        self._max_total = max_total
+        self._max_per_ip = max_per_ip
 
-    async def connect(self, websocket: WebSocket):
+    def _client_ip(self, websocket: WebSocket) -> str:
+        if websocket.client:
+            return websocket.client.host
+        return "unknown"
+
+    async def connect(self, websocket: WebSocket) -> bool:
+        """Accept and track connection. Returns False if limits exceeded."""
+        ip = self._client_ip(websocket)
+        if len(self.active_connections) >= self._max_total:
+            logger.warning(f"WS connection rejected: total limit ({self._max_total}) reached")
+            await websocket.close(code=WS_1008_POLICY_VIOLATION)
+            return False
+        if self._ip_counts[ip] >= self._max_per_ip:
+            logger.warning(f"WS connection rejected: per-IP limit ({self._max_per_ip}) for {ip}")
+            await websocket.close(code=WS_1008_POLICY_VIOLATION)
+            return False
         await websocket.accept()
         self.active_connections.append(websocket)
+        self._ip_counts[ip] += 1
+        return True
 
     def disconnect(self, websocket: WebSocket):
         if websocket in self.active_connections:
             self.active_connections.remove(websocket)
+            ip = self._client_ip(websocket)
+            self._ip_counts[ip] = max(0, self._ip_counts[ip] - 1)
+            if self._ip_counts[ip] == 0:
+                del self._ip_counts[ip]
 
     async def send_message(self, websocket: WebSocket, message: StreamingMessage):
         try:
             await websocket.send_text(message.model_dump_json())
         except Exception as e:
-            logger.warning(f"Failed to send WebSocket message: {e}")
+            logger.warning(f"Failed to send WebSocket message: {type(e).__name__}")
 
-manager = ConnectionManager()
+manager = ConnectionManager(max_total=_MAX_CONNECTIONS, max_per_ip=_MAX_CONNECTIONS_PER_IP)
 
 @app.websocket("/ws/chat")
 async def websocket_chat_endpoint(websocket: WebSocket):
     """WebSocket endpoint for streaming chat responses"""
-    await manager.connect(websocket)
+
+    # --- Security: Validate Origin header to prevent Cross-Site WebSocket Hijacking ---
+    origin = (websocket.headers.get("origin") or "").rstrip("/")
+    allowed = {o.rstrip("/") for o in _cors_origins}
+    if origin and origin not in allowed:
+        logger.warning(f"WebSocket connection rejected: origin {origin!r} not in allowed list")
+        await websocket.close(code=WS_1008_POLICY_VIOLATION)
+        return
+
+    # --- Security: Validate AUTH_TOKEN if configured ---
+    if _AUTH_TOKEN:
+        token = websocket.query_params.get("token", "")
+        if token != _AUTH_TOKEN:
+            logger.warning("WebSocket connection rejected: invalid or missing auth token")
+            await websocket.close(code=WS_1008_POLICY_VIOLATION)
+            return
+
+    if not await manager.connect(websocket):
+        return  # limits exceeded, connection already closed
+
+    # Per-connection rate limiter state
+    _msg_timestamps: list[float] = []
+    # Cancellation signal — set when connection closes to stop producer threads
+    cancelled = threading.Event()
 
     try:
         while True:
             # Receive message from client
             data = await websocket.receive_text()
+
+            # --- Rate limiting: sliding window per connection ---
+            now = time.monotonic()
+            _msg_timestamps = [t for t in _msg_timestamps if now - t < 1.0]
+            if len(_msg_timestamps) >= _WS_RATE_LIMIT_PER_SEC:
+                await manager.send_message(websocket, StreamingMessage(
+                    type="error",
+                    step="validation",
+                    content="Rate limit exceeded. Please slow down."
+                ))
+                continue
+            _msg_timestamps.append(now)
 
             # Reject oversized messages (100 KB limit)
             if len(data) > 100 * 1024:
@@ -249,23 +363,32 @@ async def websocket_chat_endpoint(websocket: WebSocket):
                 ))
                 continue
 
-            request_data = json.loads(data)
+            try:
+                request_data = json.loads(data)
+            except json.JSONDecodeError:
+                await manager.send_message(websocket, StreamingMessage(
+                    type="error",
+                    step="validation",
+                    content="Invalid JSON message"
+                ))
+                continue
 
             # Process the request with streaming
-            await process_streaming_chat(websocket, request_data)
+            await process_streaming_chat(websocket, request_data, cancelled=cancelled)
 
     except WebSocketDisconnect:
+        cancelled.set()  # signal producer threads to stop immediately
         manager.disconnect(websocket)
         logger.info("WebSocket client disconnected")
     except Exception as e:
-        logger.error(f"WebSocket error: {e}")
-        await manager.send_message(websocket, StreamingMessage(
-            type="error",
-            step="processing",
-            content=f"Processing failed: {str(e)}"
-        ))
+        cancelled.set()
+        logger.error(f"WebSocket error: {type(e).__name__}")
+        manager.disconnect(websocket)
 
-async def _stream_translation(translator, text: str, source_language: str, target_language: str):
+async def _stream_translation(
+    translator, text: str, source_language: str, target_language: str,
+    cancelled: Optional[threading.Event] = None,
+):
     """
     Async generator that wraps the synchronous LLM streaming translation generator.
 
@@ -273,14 +396,17 @@ async def _stream_translation(translator, text: str, source_language: str, targe
     token to the async caller via an asyncio.Queue.
     """
     loop = asyncio.get_running_loop()
-    queue: asyncio.Queue = asyncio.Queue()
+    queue: asyncio.Queue = asyncio.Queue(maxsize=_STREAM_QUEUE_MAXSIZE)
 
     def _producer():
         try:
             for token in translator.stream_translate(text, source_language, target_language):
-                loop.call_soon_threadsafe(queue.put_nowait, token)
+                if cancelled and cancelled.is_set():
+                    break
+                asyncio.run_coroutine_threadsafe(queue.put(token), loop).result()
         except Exception as exc:
-            loop.call_soon_threadsafe(queue.put_nowait, exc)
+            if not (cancelled and cancelled.is_set()):
+                loop.call_soon_threadsafe(queue.put_nowait, exc)
         finally:
             loop.call_soon_threadsafe(queue.put_nowait, None)  # sentinel
 
@@ -303,6 +429,7 @@ async def _stream_inference(
     response_type: str,
     conversation_history: list = None,
     system_prompt_override: Optional[str] = None,
+    cancelled: Optional[threading.Event] = None,
     **kwargs,
 ):
     """
@@ -313,7 +440,7 @@ async def _stream_inference(
     never blocked.
     """
     loop = asyncio.get_running_loop()
-    queue: asyncio.Queue = asyncio.Queue()
+    queue: asyncio.Queue = asyncio.Queue(maxsize=_STREAM_QUEUE_MAXSIZE)
 
     def _producer():
         try:
@@ -323,9 +450,12 @@ async def _stream_inference(
                 system_prompt_override=system_prompt_override,
                 **kwargs
             ):
-                loop.call_soon_threadsafe(queue.put_nowait, token)
+                if cancelled and cancelled.is_set():
+                    break
+                asyncio.run_coroutine_threadsafe(queue.put(token), loop).result()
         except Exception as exc:
-            loop.call_soon_threadsafe(queue.put_nowait, exc)
+            if not (cancelled and cancelled.is_set()):
+                loop.call_soon_threadsafe(queue.put_nowait, exc)
         finally:
             loop.call_soon_threadsafe(queue.put_nowait, None)  # sentinel
 
@@ -344,21 +474,27 @@ async def _stream_inference(
     await producer_future  # ensure thread is cleaned up
 
 
-async def _stream_routing(router: PromptRouter, user_message: str, processing_language: str):
+async def _stream_routing(
+    router: PromptRouter, user_message: str, processing_language: str,
+    cancelled: Optional[threading.Event] = None,
+):
     """
     Async generator that streams routing output token by token.
     The LLM outputs [Template Label] on the first line, followed by the system prompt.
     Uses the same thread-pool + queue pattern as _stream_inference.
     """
     loop = asyncio.get_running_loop()
-    queue: asyncio.Queue = asyncio.Queue()
+    queue: asyncio.Queue = asyncio.Queue(maxsize=_STREAM_QUEUE_MAXSIZE)
 
     def _producer():
         try:
             for token in router.route_stream(user_message, processing_language):
-                loop.call_soon_threadsafe(queue.put_nowait, token)
+                if cancelled and cancelled.is_set():
+                    break
+                asyncio.run_coroutine_threadsafe(queue.put(token), loop).result()
         except Exception as exc:
-            loop.call_soon_threadsafe(queue.put_nowait, exc)
+            if not (cancelled and cancelled.is_set()):
+                loop.call_soon_threadsafe(queue.put_nowait, exc)
         finally:
             loop.call_soon_threadsafe(queue.put_nowait, None)
 
@@ -393,7 +529,7 @@ def _resolve_agents(request_data: Dict[str, Any]):
     anthropic_key = (request_data.get('anthropic_api_key') or '').strip()
     google_key    = (request_data.get('google_api_key')    or '').strip()
     qwen_key      = (request_data.get('qwen_api_key')      or '').strip()
-    qwen_base_url = (request_data.get('qwen_base_url')     or '').strip() or None
+    qwen_base_url = _validate_qwen_base_url(request_data.get('qwen_base_url'))
 
     main_prov   = request_data.get('main_llm_provider',        'auto')
     trans_prov  = request_data.get('translation_llm_provider', 'auto')
@@ -466,7 +602,10 @@ def _resolve_agents(request_data: Dict[str, Any]):
     return translator, questioner
 
 
-async def process_streaming_chat(websocket: WebSocket, request_data: Dict[str, Any]):
+async def process_streaming_chat(
+    websocket: WebSocket, request_data: Dict[str, Any],
+    cancelled: Optional[threading.Event] = None,
+):
     """Process chat request with streaming updates"""
 
     message = request_data.get("message", "")
@@ -477,18 +616,57 @@ async def process_streaming_chat(websocket: WebSocket, request_data: Dict[str, A
     translation_method = request_data.get("translation_method", "google")
     conversation_history = request_data.get("conversation_history", [])
 
-    # Truncate conversation history to avoid unbounded memory / token growth
+    # --- Input validation ---
+    _valid_languages = set(LanguageConfig.get_supported_languages())
+    _valid_response_types = {"general", "creative", "analytical", "educational", "technical"}
+    _valid_translation_methods = {"llm", "google"}
+
+    for lang_name, lang_val in [
+        ("source_language", source_language),
+        ("target_language", target_language),
+        ("processing_language", processing_language),
+    ]:
+        if lang_val not in _valid_languages:
+            await manager.send_message(websocket, StreamingMessage(
+                type="error", step="validation",
+                content=f"Unsupported {lang_name}: must be one of {sorted(_valid_languages)}"
+            ))
+            return
+
+    if response_type not in _valid_response_types:
+        response_type = "general"
+    if translation_method not in _valid_translation_methods:
+        translation_method = "google"
+
+    # Limit message length (10,000 chars max)
+    if len(message) > 10_000:
+        await manager.send_message(websocket, StreamingMessage(
+            type="error", step="validation",
+            content="Message too long (max 10,000 characters)"
+        ))
+        return
+
+    # Validate and sanitize conversation history
     max_turns = int(os.getenv("MAX_HISTORY_TURNS", "20"))
     max_messages = max_turns * 2
-    if len(conversation_history) > max_messages:
-        conversation_history = conversation_history[-max_messages:]
+    _valid_roles = {"user", "assistant"}
+    sanitized_history = []
+    for entry in conversation_history[-max_messages:]:
+        if (
+            isinstance(entry, dict)
+            and entry.get("role") in _valid_roles
+            and isinstance(entry.get("content"), str)
+            and len(entry["content"]) <= 20_000
+        ):
+            sanitized_history.append({"role": entry["role"], "content": entry["content"]})
+    conversation_history = sanitized_history
 
     try:
         translator, questioner = _resolve_agents(request_data)
-    except ValueError as e:
+    except ValueError:
         await manager.send_message(websocket, StreamingMessage(
             type="error", step="initialization",
-            content=f"No API key available: {e}"
+            content="No API key available. Please configure an API key in settings."
         ))
         return
 
@@ -513,7 +691,7 @@ async def process_streaming_chat(websocket: WebSocket, request_data: Dict[str, A
             routed_system_prompt = ""
 
             try:
-                async for token in _stream_routing(router, message, processing_language):
+                async for token in _stream_routing(router, message, processing_language, cancelled=cancelled):
                     if not header_parsed:
                         header_buffer += token
                         if "\n" in header_buffer:
@@ -589,7 +767,8 @@ async def process_streaming_chat(websocket: WebSocket, request_data: Dict[str, A
                 # LLM translation — stream tokens to the frontend in real time
                 processed_input = ""
                 async for token in _stream_translation(
-                    translator, message, source_language, processing_language
+                    translator, message, source_language, processing_language,
+                    cancelled=cancelled,
                 ):
                     processed_input += token
                     await manager.send_message(websocket, StreamingMessage(
@@ -646,6 +825,7 @@ async def process_streaming_chat(websocket: WebSocket, request_data: Dict[str, A
             questioner, processed_input, response_type,
             conversation_history=conversation_history or None,
             system_prompt_override=routed_system_prompt,
+            cancelled=cancelled,
         ):
             processed_response += token
             await manager.send_message(websocket, StreamingMessage(
@@ -668,7 +848,8 @@ async def process_streaming_chat(websocket: WebSocket, request_data: Dict[str, A
                 # LLM translation — stream tokens to the frontend in real time
                 final_response = ""
                 async for token in _stream_translation(
-                    translator, processed_response, processing_language, target_language
+                    translator, processed_response, processing_language, target_language,
+                    cancelled=cancelled,
                 ):
                     final_response += token
                     await manager.send_message(websocket, StreamingMessage(
@@ -721,10 +902,11 @@ async def process_streaming_chat(websocket: WebSocket, request_data: Dict[str, A
             ))
 
     except Exception as e:
+        logger.error(f"Processing error: {type(e).__name__}: {e}")
         await manager.send_message(websocket, StreamingMessage(
             type="error",
             step="processing",
-            content=f"Error: {str(e)}"
+            content=_sanitize_error(e)
         ))
 
 if __name__ == "__main__":

@@ -77,8 +77,8 @@ class OpenAILLM(BaseLLM):
                 return ""
 
         except Exception as e:
-            logger.error(f"OpenAI API call error: {str(e)}")
-            raise e
+            logger.error(f"OpenAI API call error: {type(e).__name__}")
+            raise
 
     def get_model_info(self) -> Dict[str, Any]:
         """
