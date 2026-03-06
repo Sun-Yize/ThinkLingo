@@ -40,7 +40,7 @@ The dual-column UI shows both sides — the English reasoning and your native la
 
 ### Option A — Command Line
 
-**Prerequisites:** Python 3.11+, Node.js 18+, a DeepSeek API key and/or OpenAI API key.
+**Prerequisites:** Python 3.11+, Node.js 18+, at least one LLM API key.
 
 **1. Clone and configure**
 
@@ -50,7 +50,7 @@ cd ThinkLingo
 cp .env.template .env
 ```
 
-Open `.env` and fill in your API keys (at minimum `DEEPSEEK_API_KEY` and `OPENAI_API_KEY`).
+Open `.env` and fill in at least one API key (see [Configuration](#configuration) below).
 
 **2. Start everything with one command**
 
@@ -112,36 +112,65 @@ docker-compose up -d --build    # rebuild after code changes
 
 ---
 
+## Supported LLM Providers
+
+ThinkLingo uses a **dual-LLM design** — one model for reasoning, another for translation. You can mix and match any combination:
+
+| Provider | Reasoning models | Translation models | API key env var |
+|---|---|---|---|
+| DeepSeek | `deepseek-chat`, `deepseek-reasoner` | `deepseek-chat` | `DEEPSEEK_API_KEY` |
+| OpenAI | `gpt-4o`, `gpt-4o-mini`, `o3-mini` | `gpt-3.5-turbo`, `gpt-4o-mini` | `OPENAI_API_KEY` |
+| Anthropic | `claude-opus-4-6`, `claude-sonnet-4-6` | `claude-haiku-4-5-20251001` | `ANTHROPIC_API_KEY` |
+| Google | `gemini-3.1-pro-preview`, `gemini-2.5-pro` | `gemini-2.5-flash` | `GOOGLE_API_KEY` |
+| Alibaba (Qwen) | `qwen3.5-plus`, `qwen3-max` | `qwen-turbo`, `qwen-plus` | `QWEN_API_KEY` |
+
+Users can also supply their own API keys per-session via the frontend (when `ALLOW_USER_API_KEYS=true`).
+
+---
+
 ## Configuration
 
 All configuration lives in `.env` (copied from `.env.template`):
 
 ```bash
-# Required — at least one of these
-DEEPSEEK_API_KEY=your_deepseek_api_key
-OPENAI_API_KEY=your_openai_api_key
+# ── API Keys (at least one required) ──────────────────────
+DEEPSEEK_API_KEY=...
+OPENAI_API_KEY=...
+ANTHROPIC_API_KEY=...       # also accepts ANTHROPIC_AUTH_TOKEN for OAuth
+GOOGLE_API_KEY=...
+QWEN_API_KEY=...
 
-# Which model handles reasoning (default: deepseek)
-DEFAULT_LLM_PROVIDER=deepseek        # deepseek | openai
+# ── Provider Selection ────────────────────────────────────
+# Supported: deepseek | openai | gpt35 | claude | gemini | qwen
+DEFAULT_LLM_PROVIDER=deepseek       # reasoning model
+TRANSLATION_LLM_PROVIDER=gpt35      # translation model
 
-# Which model handles translation — GPT-3.5 is fast and cheap (default: gpt35)
-TRANSLATION_LLM_PROVIDER=gpt35       # gpt35 | openai | deepseek
-
-# Model names
+# ── Model Names ───────────────────────────────────────────
 DEEPSEEK_MODEL=deepseek-chat
 OPENAI_MODEL=gpt-4o-mini
 GPT35_MODEL=gpt-3.5-turbo
+CLAUDE_MODEL=claude-opus-4-6
+GEMINI_MODEL=gemini-3.1-pro-preview
+QWEN_MODEL=qwen3.5-plus
 
-# Tuning
+# ── Runtime ───────────────────────────────────────────────
 DEFAULT_TEMPERATURE=0.7
 MAX_TOKENS=4000
 MAX_HISTORY_TURNS=20
+MAX_WORKERS=40               # thread pool for blocking LLM calls
 
-# CORS — must match the origin your browser connects from
+# ── Security ──────────────────────────────────────────────
+ALLOW_USER_API_KEYS=true     # let users supply their own keys via UI
+# AUTH_TOKEN=...             # protect all endpoints (Bearer token)
+DAILY_MESSAGE_QUOTA_PER_IP=200  # 0 = unlimited
+
+# ── CORS ──────────────────────────────────────────────────
 CORS_ORIGINS=http://localhost:3000
 ```
 
 **Cost tip:** The default dual-LLM setup (DeepSeek for reasoning, GPT-3.5 for translation) minimizes cost while maximizing quality. If you only have one API key, set both providers to the same value.
+
+See `.env.template` for the full list of options with comments.
 
 ---
 
@@ -152,8 +181,7 @@ CORS_ORIGINS=http://localhost:3000
 | Frontend | React 18, TypeScript, Tailwind CSS |
 | Backend | FastAPI, Python 3.11, uvicorn |
 | Streaming | WebSocket (real-time token streaming) |
-| Reasoning LLM | DeepSeek `deepseek-chat` (default) |
-| Translation LLM | OpenAI `gpt-3.5-turbo` (default) |
+| LLM Providers | DeepSeek, OpenAI, Anthropic/Claude, Google/Gemini, Alibaba/Qwen |
 | Reverse Proxy | nginx |
 | Deployment | Docker + Docker Compose |
 
@@ -165,27 +193,31 @@ CORS_ORIGINS=http://localhost:3000
 ThinkLingo/
 ├── backend/
 │   ├── app.py                           # FastAPI entry point + WebSocket
+│   ├── prompt_router.py                 # Smart prompt routing per message
 │   ├── orchestrator/
 │   │   └── translation_orchestrator.py  # 4-step pipeline coordinator
 │   ├── agents/
 │   │   ├── translator_agent.py          # Language detection & translation
-│   │   └── questioner_agent.py          # English-language inference
+│   │   └── questioner_agent.py          # Processing-language inference
 │   ├── llms/
 │   │   ├── base.py                      # Abstract LLM interface
 │   │   ├── deepseek_llm.py
 │   │   ├── openai_llm.py
-│   │   └── gpt35_llm.py
+│   │   ├── gpt35_llm.py
+│   │   ├── claude_llm.py
+│   │   ├── gemini_llm.py
+│   │   └── qwen_llm.py
 │   └── utils/
 │       ├── config.py                    # Typed config loader
-│       ├── llm_factory.py               # LLM factory
+│       ├── llm_factory.py              # LLM factory
 │       └── language_config.py           # Supported languages
 ├── frontend/                            # React + TypeScript SPA
 ├── nginx/
 │   ├── nginx-local.conf                 # Local Docker config
-│   └── nginx.conf                       # Production config (HTTPS)
+│   └── nginx.conf                       # Production config (HTTPS + rate limiting)
 ├── start.sh                             # One-command local startup
 ├── docker-compose.yml                   # Local deployment
-├── docker-compose.prod.yml              # Production overlay
+├── docker-compose.prod.yml              # Production overlay (HTTPS, subpath)
 ├── Dockerfile                           # Backend image
 └── .env.template                        # Config template
 ```
@@ -194,9 +226,15 @@ ThinkLingo/
 
 ## Extending
 
-- **Add an LLM provider** — extend `backend/llms/base.py`, register in `backend/utils/llm_factory.py`
+- **Add an LLM provider** — extend `backend/llms/base.py`, register in `backend/utils/llm_factory.py`, add to `Config` and frontend `ApiConfigModal.tsx`
 - **Add a language** — update `backend/utils/language_config.py`, agent prompts, and `frontend/src/utils/i18n.ts`
 - **Add a response type** — update `backend/agents/questioner_agent.py` and `frontend/src/utils/i18n.ts`
+
+---
+
+## Deployment
+
+See [DEPLOY.md](DEPLOY.md) for a full self-hosting guide with HTTPS, rate limiting, and authentication.
 
 ---
 
