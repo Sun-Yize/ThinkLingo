@@ -5,6 +5,7 @@ services:
     build:
       args:
         - PUBLIC_URL=/ThinkLingo
+        - REACT_APP_AUTH_TOKEN=${AUTH_TOKEN}
 
   nginx:
     ports:
