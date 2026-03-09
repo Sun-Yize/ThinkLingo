@@ -18,7 +18,6 @@ class Config:
         deepseek_model: str = "deepseek-chat",
         openai_api_key: Optional[str] = None,
         openai_model: str = "gpt-4o-mini",
-        gpt35_model: str = "gpt-3.5-turbo",
         anthropic_api_key: Optional[str] = None,
         claude_model: str = "claude-opus-4-6",
         google_api_key: Optional[str] = None,
@@ -37,13 +36,12 @@ class Config:
 
         Args:
             default_llm_provider: Default LLM provider
-                ("deepseek", "openai", "gpt35", "claude", "gemini", "qwen")
+                ("deepseek", "openai", "claude", "gemini", "qwen")
             translation_llm_provider: Optional separate provider for translation tasks
             deepseek_api_key: DeepSeek API key
             deepseek_model: DeepSeek model to use
             openai_api_key: OpenAI API key
             openai_model: OpenAI model to use
-            gpt35_model: GPT-3.5 model to use
             anthropic_api_key: Anthropic API key (for Claude)
             claude_model: Claude model to use
             google_api_key: Google API key (for Gemini)
@@ -59,7 +57,7 @@ class Config:
 
         # Provider Configuration
         self.default_llm_provider = default_llm_provider or os.getenv("DEFAULT_LLM_PROVIDER", "deepseek")
-        self.translation_llm_provider = translation_llm_provider or os.getenv("TRANSLATION_LLM_PROVIDER", "gpt35")
+        self.translation_llm_provider = translation_llm_provider or os.getenv("TRANSLATION_LLM_PROVIDER", "openai")
 
         # API Configuration
         self.deepseek_api_key  = deepseek_api_key  or os.getenv("DEEPSEEK_API_KEY")
@@ -71,7 +69,6 @@ class Config:
         # Model Configuration
         self.deepseek_model = deepseek_model or os.getenv("DEEPSEEK_MODEL", "deepseek-chat")
         self.openai_model   = openai_model   or os.getenv("OPENAI_MODEL",   "gpt-4o-mini")
-        self.gpt35_model    = gpt35_model    or os.getenv("GPT35_MODEL",    "gpt-3.5-turbo")
         self.claude_model   = claude_model   or os.getenv("CLAUDE_MODEL",   "claude-opus-4-6")
         self.gemini_model   = gemini_model   or os.getenv("GEMINI_MODEL",   "gemini-3.1-pro-preview")
         self.qwen_model     = qwen_model     or os.getenv("QWEN_MODEL",     "qwen3.5-plus")
@@ -90,7 +87,7 @@ class Config:
     def _validate_config(self):
         """Validate the configuration"""
         # Validate providers
-        valid_providers = ["deepseek", "openai", "gpt35", "claude", "gemini", "qwen"]
+        valid_providers = ["deepseek", "openai", "claude", "gemini", "qwen"]
 
         if self.default_llm_provider not in valid_providers:
             raise ValueError(f"Default LLM provider must be one of: {valid_providers}")
@@ -102,7 +99,6 @@ class Config:
         _key_checks = {
             "deepseek": (self.deepseek_api_key,  "DEEPSEEK_API_KEY"),
             "openai":   (self.openai_api_key,    "OPENAI_API_KEY"),
-            "gpt35":    (self.openai_api_key,    "OPENAI_API_KEY"),
             "claude":   (self.anthropic_api_key, "ANTHROPIC_API_KEY"),
             "gemini":   (self.google_api_key,    "GOOGLE_API_KEY"),
             "qwen":     (self.qwen_api_key,      "QWEN_API_KEY"),
@@ -142,7 +138,6 @@ class Config:
         return {
             "deepseek": self.deepseek_api_key,
             "openai":   self.openai_api_key,
-            "gpt35":    self.openai_api_key,
             "claude":   self.anthropic_api_key,
             "gemini":   self.google_api_key,
             "qwen":     self.qwen_api_key,
@@ -152,7 +147,6 @@ class Config:
         return {
             "deepseek": self.deepseek_model,
             "openai":   self.openai_model,
-            "gpt35":    self.gpt35_model,
             "claude":   self.claude_model,
             "gemini":   self.gemini_model,
             "qwen":     self.qwen_model,
@@ -182,7 +176,6 @@ class Config:
             "translation_llm_provider": self.translation_llm_provider,
             "deepseek_model": self.deepseek_model,
             "openai_model":   self.openai_model,
-            "gpt35_model":    self.gpt35_model,
             "claude_model":   self.claude_model,
             "gemini_model":   self.gemini_model,
             "qwen_model":     self.qwen_model,
@@ -204,12 +197,11 @@ class Config:
 
         return cls(
             default_llm_provider=os.getenv("DEFAULT_LLM_PROVIDER", "deepseek"),
-            translation_llm_provider=os.getenv("TRANSLATION_LLM_PROVIDER", "gpt35"),
+            translation_llm_provider=os.getenv("TRANSLATION_LLM_PROVIDER", "openai"),
             deepseek_api_key=os.getenv("DEEPSEEK_API_KEY"),
             deepseek_model=os.getenv("DEEPSEEK_MODEL", "deepseek-chat"),
             openai_api_key=os.getenv("OPENAI_API_KEY"),
             openai_model=os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
-            gpt35_model=os.getenv("GPT35_MODEL", "gpt-3.5-turbo"),
             anthropic_api_key=os.getenv("ANTHROPIC_API_KEY"),
             claude_model=os.getenv("CLAUDE_MODEL", "claude-opus-4-6"),
             google_api_key=os.getenv("GOOGLE_API_KEY"),

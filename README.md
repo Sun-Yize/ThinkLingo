@@ -141,14 +141,13 @@ GOOGLE_API_KEY=...
 QWEN_API_KEY=...
 
 # ── Provider Selection ────────────────────────────────────
-# Supported: deepseek | openai | gpt35 | claude | gemini | qwen
+# Supported: deepseek | openai | claude | gemini | qwen
 DEFAULT_LLM_PROVIDER=deepseek       # reasoning model
-TRANSLATION_LLM_PROVIDER=gpt35      # translation model
+TRANSLATION_LLM_PROVIDER=openai     # translation model
 
 # ── Model Names ───────────────────────────────────────────
 DEEPSEEK_MODEL=deepseek-chat
 OPENAI_MODEL=gpt-4o-mini
-GPT35_MODEL=gpt-3.5-turbo
 CLAUDE_MODEL=claude-opus-4-6
 GEMINI_MODEL=gemini-3.1-pro-preview
 QWEN_MODEL=qwen3.5-plus
@@ -203,7 +202,6 @@ ThinkLingo/
 │   │   ├── base.py                      # Abstract LLM interface
 │   │   ├── deepseek_llm.py
 │   │   ├── openai_llm.py
-│   │   ├── gpt35_llm.py
 │   │   ├── claude_llm.py
 │   │   ├── gemini_llm.py
 │   │   └── qwen_llm.py

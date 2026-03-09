@@ -1,13 +1,12 @@
 """
 LLM Factory — creates provider instances from config or explicit parameters.
 
-Supported providers: deepseek | openai | gpt35 | claude | gemini | qwen
+Supported providers: deepseek | openai | claude | gemini | qwen
 """
 
 from ..llms.base import BaseLLM
 from ..llms.deepseek_llm import DeepSeekLLM
 from ..llms.openai_llm import OpenAILLM
-from ..llms.gpt35_llm import GPT35LLM
 from ..llms.claude_llm import ClaudeLLM
 from ..llms.gemini_llm import GeminiLLM
 from ..llms.qwen_llm import QwenLLM
@@ -21,7 +20,6 @@ class LLMFactory:
     _REGISTRY = {
         "deepseek": (DeepSeekLLM, "deepseek_api_key",  "deepseek_model"),
         "openai":   (OpenAILLM,   "openai_api_key",    "openai_model"),
-        "gpt35":    (GPT35LLM,    "openai_api_key",    "gpt35_model"),
         "claude":   (ClaudeLLM,   "anthropic_api_key", "claude_model"),
         "gemini":   (GeminiLLM,   "google_api_key",    "gemini_model"),
         "qwen":     (QwenLLM,     "qwen_api_key",      "qwen_model"),
