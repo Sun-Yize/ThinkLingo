@@ -17,6 +17,12 @@ export interface ConversationTurn {
   rightAi: string;
   rightAiStatus: 'idle' | 'streaming' | 'complete';
 
+  // Thinking (optional — models with chain-of-thought like Qwen, DeepSeek-R1)
+  rightAiThinking?: string;
+  rightAiThinkingStatus?: 'streaming' | 'complete';
+  leftAiThinking?: string;
+  leftAiThinkingStatus?: 'streaming' | 'complete';
+
   status: 'active' | 'complete' | 'error';
   error?: string;
 
@@ -24,6 +30,8 @@ export interface ConversationTurn {
   routingLabel?: string;
   refinedPrompt?: string;
   refinedPromptStatus?: 'streaming' | 'complete';
+  leftRefinedPrompt?: string;
+  leftRefinedPromptStatus?: 'streaming' | 'complete';
 }
 
 export interface WebSocketMessage {
@@ -36,10 +44,18 @@ export interface WebSocketMessage {
     | 'final_translation'
     | 'output_translation_chunk'
     | 'input_translation_chunk'
+    | 'thinking_start'
+    | 'thinking_chunk'
+    | 'thinking_complete'
+    | 'thinking_translation_start'
+    | 'thinking_translation_chunk'
+    | 'thinking_translation_complete'
     | 'prompt_routing_start'
     | 'prompt_routing_label'
     | 'prompt_routing_chunk'
     | 'prompt_routing_complete'
+    | 'prompt_routing_translation_chunk'
+    | 'prompt_routing_translation_complete'
     | 'error';
   step: string;
   content: string;

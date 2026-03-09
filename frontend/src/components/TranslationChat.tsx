@@ -51,8 +51,11 @@ interface StreamContext {
   convId: string;
   rightUserAccumulator: string;
   rightAiAccumulator: string;
+  rightAiThinkingAccumulator: string;
+  leftAiThinkingAccumulator: string;
   leftAiAccumulator: string;
   refinedPromptAccumulator: string;
+  leftRefinedPromptAccumulator: string;
   pendingEnglishInput: string;
   // null = foreground (React state is source of truth)
   // non-null = background snapshot
@@ -582,7 +585,36 @@ const TranslationChat: React.FC = () => {
 
       case 'processing_start':
         ctx.rightAiAccumulator = '';
+        ctx.rightAiThinkingAccumulator = '';
         updateLastTurn(ctx, { rightAiStatus: 'streaming' });
+        break;
+
+      case 'thinking_start':
+        ctx.rightAiThinkingAccumulator = '';
+        updateLastTurn(ctx, { rightAiThinking: '', rightAiThinkingStatus: 'streaming' });
+        break;
+
+      case 'thinking_chunk':
+        ctx.rightAiThinkingAccumulator += msg.content;
+        updateLastTurn(ctx, { rightAiThinking: ctx.rightAiThinkingAccumulator, rightAiThinkingStatus: 'streaming' });
+        break;
+
+      case 'thinking_complete':
+        updateLastTurn(ctx, { rightAiThinkingStatus: 'complete' });
+        break;
+
+      case 'thinking_translation_start':
+        ctx.leftAiThinkingAccumulator = '';
+        updateLastTurn(ctx, { leftAiThinking: '', leftAiThinkingStatus: 'streaming' });
+        break;
+
+      case 'thinking_translation_chunk':
+        ctx.leftAiThinkingAccumulator += msg.content;
+        updateLastTurn(ctx, { leftAiThinking: ctx.leftAiThinkingAccumulator, leftAiThinkingStatus: 'streaming' });
+        break;
+
+      case 'thinking_translation_complete':
+        updateLastTurn(ctx, { leftAiThinkingStatus: 'complete' });
         break;
 
       case 'processing_chunk':
@@ -645,6 +677,18 @@ const TranslationChat: React.FC = () => {
         });
         break;
 
+      case 'prompt_routing_translation_chunk':
+        ctx.leftRefinedPromptAccumulator += msg.content;
+        updateLastTurn(ctx, {
+          leftRefinedPrompt:       ctx.leftRefinedPromptAccumulator,
+          leftRefinedPromptStatus: 'streaming',
+        });
+        break;
+
+      case 'prompt_routing_translation_complete':
+        updateLastTurn(ctx, { leftRefinedPromptStatus: 'complete' });
+        break;
+
       case 'error':
         if (msg.metadata?.quota_exceeded) {
           setQuotaRemaining(0);
@@ -682,8 +726,11 @@ const TranslationChat: React.FC = () => {
       convId: convIdRef.current!,
       rightUserAccumulator: '',
       rightAiAccumulator: '',
+      rightAiThinkingAccumulator: '',
+      leftAiThinkingAccumulator: '',
       leftAiAccumulator: '',
       refinedPromptAccumulator: '',
+      leftRefinedPromptAccumulator: '',
       pendingEnglishInput: '',
       turns: null,   // foreground — React state is source of truth
       history: null,

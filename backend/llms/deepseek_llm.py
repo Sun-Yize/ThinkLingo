@@ -103,10 +103,23 @@ class DeepSeekLLM(BaseLLM):
         }
 
         response = self.client.chat.completions.create(**params)
+        reasoning_started = False
         for chunk in response:
-            delta = chunk.choices[0].delta.content
-            if delta:
-                yield delta
+            choice = chunk.choices[0]
+            # DeepSeek Reasoner emits thinking via a separate reasoning_content field
+            reasoning = getattr(choice.delta, 'reasoning_content', None)
+            if reasoning:
+                if not reasoning_started:
+                    reasoning_started = True
+                    yield "<think>"
+                yield reasoning
+            else:
+                if reasoning_started:
+                    reasoning_started = False
+                    yield "</think>"
+                delta = choice.delta.content
+                if delta:
+                    yield delta
 
     def get_model_info(self) -> Dict[str, Any]:
         """

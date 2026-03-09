@@ -301,6 +301,7 @@ const DualColumnView: React.FC<DualColumnViewProps> = ({ turns, settings, langua
               key={turn.id}
               turn={turn}
               sourceLanguage={settings.sourceLanguage}
+              processingLanguage={settings.processingLanguage}
               columnFocus={columnFocus}
             />
           ))

@@ -261,13 +261,34 @@ class ParagraphBuffer:
         # Need at least min_lines OR min_chars
         if self._buf.count('\n') < self._min_lines and len(self._buf) < self._min_chars:
             return None
-        # Look for the last paragraph boundary (double newline)
-        idx = self._buf.rfind('\n\n')
-        if idx < 0:
+        # Find the last paragraph boundary (\n\n) that is NOT inside a fenced
+        # code block.  Split buffer into lines and walk them to track fence state.
+        buf = self._buf
+        lines = buf.split('\n')
+        fence = False
+        # Record char offset of each \n\n that is outside a fence
+        safe_split = -1
+        offset = 0
+        for i, line in enumerate(lines):
+            if line.strip().startswith('```'):
+                fence = not fence
+            # A \n\n occurs between two consecutive empty-line boundaries:
+            # after this line's trailing \n, if the next char is also \n.
+            line_end = offset + len(line)  # position of the \n after this line
+            if i < len(lines) - 1:
+                # Check if this line boundary is a \n\n (current line ends, next starts)
+                # In the original string, position line_end is '\n'.
+                # A double newline means the next line is empty OR we have \n\n at line_end.
+                if not fence and line_end + 1 < len(buf) and buf[line_end:line_end+2] == '\n\n':
+                    safe_split = line_end
+                offset = line_end + 1  # skip the \n
+            else:
+                offset = line_end
+        if safe_split < 0:
             return None
         # Split: flush everything up to and including the \n\n
-        chunk = self._buf[:idx + 2]
-        self._buf = self._buf[idx + 2:]
+        chunk = buf[:safe_split + 2]
+        self._buf = buf[safe_split + 2:]
         return chunk
 
     def flush(self) -> Optional[str]:
@@ -290,7 +311,7 @@ _DEFAULT_MODELS = {
     'openai':   'gpt-4o-mini',
     'claude':   'claude-opus-4-6',
     'gemini':   'gemini-3.1-pro-preview',
-    'qwen':     'qwen3.5-plus',
+    'qwen':     'qwen-plus',
 }
 
 @asynccontextmanager
@@ -662,6 +683,116 @@ async def websocket_chat_endpoint(websocket: WebSocket):
         cancelled.set()
         logger.error(f"WebSocket error: {type(e).__name__}")
         manager.disconnect(websocket)
+
+# ── Think-tag streaming helpers ──────────────────────────────────────
+# Some models (Qwen 3.x, DeepSeek-R1) emit <think>…</think> blocks.
+# For translation we strip them; for inference we separate them.
+
+async def _strip_think_tags(async_gen):
+    """Async generator wrapper that silently strips <think>…</think> blocks."""
+    in_think = False
+    buf = ""
+    async for token in async_gen:
+        if in_think:
+            buf += token
+            idx = buf.find("</think>")
+            if idx != -1:
+                in_think = False
+                remainder = buf[idx + 8:]
+                buf = ""
+                if remainder.lstrip():
+                    yield remainder.lstrip()
+            continue
+        buf += token
+        idx = buf.find("<think>")
+        if idx != -1:
+            before = buf[:idx]
+            if before:
+                yield before
+            after = buf[idx + 7:]
+            close = after.find("</think>")
+            if close != -1:
+                remainder = after[close + 8:]
+                buf = ""
+                if remainder.lstrip():
+                    yield remainder.lstrip()
+            else:
+                in_think = True
+                buf = after
+        else:
+            safe = buf[:-7] if len(buf) > 7 else ""
+            buf = buf[len(safe):]
+            if safe:
+                yield safe
+    if buf and not in_think:
+        yield buf
+
+
+# Sentinel tokens used to separate thinking from response in inference stream
+_THINK_START = "\x00__THINK_START__\x00"
+_THINK_END = "\x00__THINK_END__\x00"
+
+
+async def _split_think_tags(async_gen):
+    """
+    Async generator wrapper that splits <think>…</think> blocks from response.
+    Yields _THINK_START, thinking tokens, _THINK_END, then response tokens.
+    """
+    in_think = False
+    buf = ""
+    think_started = False
+    async for token in async_gen:
+        if in_think:
+            buf += token
+            idx = buf.find("</think>")
+            if idx != -1:
+                in_think = False
+                thinking_tail = buf[:idx]
+                if thinking_tail:
+                    yield thinking_tail
+                yield _THINK_END
+                remainder = buf[idx + 8:]
+                buf = ""
+                if remainder.lstrip():
+                    yield remainder.lstrip()
+            else:
+                # Yield thinking tokens as they come (don't buffer excessively)
+                if len(buf) > 8:
+                    safe = buf[:-8]
+                    buf = buf[len(safe):]
+                    yield safe
+            continue
+        buf += token
+        idx = buf.find("<think>")
+        if idx != -1:
+            before = buf[:idx]
+            if before:
+                yield before
+            if not think_started:
+                yield _THINK_START
+                think_started = True
+            after = buf[idx + 7:]
+            close = after.find("</think>")
+            if close != -1:
+                thinking_content = after[:close]
+                if thinking_content:
+                    yield thinking_content
+                yield _THINK_END
+                remainder = after[close + 8:]
+                buf = ""
+                if remainder.lstrip():
+                    yield remainder.lstrip()
+            else:
+                in_think = True
+                buf = after
+        else:
+            safe = buf[:-7] if len(buf) > 7 else ""
+            buf = buf[len(safe):]
+            if safe:
+                yield safe
+    if buf and not in_think:
+        yield buf
+
 
 async def _stream_translation(
     translator, text: str, source_language: str, target_language: str,
@@ -1056,6 +1187,62 @@ async def process_streaming_chat(
                 metadata={"template_label": routing_label}
             ))
 
+            # Translate the system prompt to source language for the left column
+            if routed_system_prompt and source_language != processing_language:
+                try:
+                    if translation_method == 'llm':
+                        async for tok in _strip_think_tags(_stream_translation(
+                            translator, routed_system_prompt,
+                            processing_language, source_language,
+                            cancelled=cancelled,
+                            context_hint="system prompt / instructions",
+                        )):
+                            await _send(StreamingMessage(
+                                type="prompt_routing_translation_chunk",
+                                step="routing",
+                                content=tok,
+                                metadata={}
+                            ))
+                    else:
+                        translated_prompt = await asyncio.to_thread(
+                            translator.translate,
+                            routed_system_prompt, processing_language, source_language, 'google'
+                        )
+                        await _send(StreamingMessage(
+                            type="prompt_routing_translation_chunk",
+                            step="routing",
+                            content=translated_prompt,
+                            metadata={}
+                        ))
+                    await _send(StreamingMessage(
+                        type="prompt_routing_translation_complete",
+                        step="routing",
+                        content="",
+                        metadata={}
+                    ))
+                except Exception as _te:
+                    logger.warning(f"System prompt translation failed: {_te}")
+                    await _send(StreamingMessage(
+                        type="prompt_routing_translation_complete",
+                        step="routing",
+                        content="",
+                        metadata={}
+                    ))
+            elif routed_system_prompt:
+                # Same language — mirror directly
+                await _send(StreamingMessage(
+                    type="prompt_routing_translation_chunk",
+                    step="routing",
+                    content=routed_system_prompt,
+                    metadata={}
+                ))
+                await _send(StreamingMessage(
+                    type="prompt_routing_translation_complete",
+                    step="routing",
+                    content="",
+                    metadata={}
+                ))
+
         # Step 1: Input translation (if needed) ───────────────────────────
         if source_language != processing_language:
             await _send(StreamingMessage(
@@ -1068,10 +1255,10 @@ async def process_streaming_chat(
             if translation_method == 'llm':
                 # LLM translation — stream tokens to the frontend in real time
                 processed_input = ""
-                async for token in _stream_translation(
+                async for token in _strip_think_tags(_stream_translation(
                     translator, message, source_language, processing_language,
                     cancelled=cancelled,
-                ):
+                )):
                     processed_input += token
                     await _send(StreamingMessage(
                         type="input_translation_chunk",
@@ -1126,18 +1313,49 @@ async def process_streaming_chat(
         processed_response = ""
 
         if not needs_translation:
-            # No translation needed — simple streaming loop
-            async for token in _stream_inference(
+            # No translation needed — simple streaming loop (with think-tag separation)
+            # Mirror thinking to left column as-is (same language)
+            in_thinking = False
+            raw_inference = _stream_inference(
                 questioner, processed_input, response_type,
                 conversation_history=conversation_history or None,
                 system_prompt_override=routed_system_prompt,
                 cancelled=cancelled,
-            ):
-                processed_response += token
-                await _send(StreamingMessage(
-                    type="processing_chunk", step="inference",
-                    content=token, metadata={"is_final": False}
-                ))
+            )
+            async for token in _split_think_tags(raw_inference):
+                if token == _THINK_START:
+                    in_thinking = True
+                    await _send(StreamingMessage(
+                        type="thinking_start", step="inference", content=""
+                    ))
+                    await _send(StreamingMessage(
+                        type="thinking_translation_start", step="output_translation", content=""
+                    ))
+                    continue
+                if token == _THINK_END:
+                    in_thinking = False
+                    await _send(StreamingMessage(
+                        type="thinking_complete", step="inference", content=""
+                    ))
+                    await _send(StreamingMessage(
+                        type="thinking_translation_complete", step="output_translation", content=""
+                    ))
+                    continue
+                if in_thinking:
+                    await _send(StreamingMessage(
+                        type="thinking_chunk", step="inference",
+                        content=token, metadata={"is_final": False}
+                    ))
+                    await _send(StreamingMessage(
+                        type="thinking_translation_chunk", step="output_translation",
+                        content=token, metadata={"is_final": False}
+                    ))
+                else:
+                    processed_response += token
+                    await _send(StreamingMessage(
+                        type="processing_chunk", step="inference",
+                        content=token, metadata={"is_final": False}
+                    ))
 
             await _send(StreamingMessage(
                 type="processing_complete", step="inference",
@@ -1186,13 +1404,13 @@ async def process_streaming_chat(
                     trailing_sep = "\n\n" if chunk.endswith("\n\n") else ""
                     if translation_method == 'llm':
                         chunk_translated = ""
-                        async for tok in _stream_translation(
+                        async for tok in _strip_think_tags(_stream_translation(
                             translator, chunk,
                             processing_language, target_language,
                             cancelled=cancelled,
                             context_hint=context_hint,
                             user_query=_user_query_ref,
-                        ):
+                        )):
                             chunk_translated += tok
                             await token_queue.put(tok)
                         # Restore paragraph break if LLM stripped it
@@ -1228,6 +1446,8 @@ async def process_streaming_chat(
             async def _ordered_output_consumer():
                 """Stream translated tokens to the frontend in chunk order."""
                 try:
+                    # Wait for thinking translation to finish before showing response
+                    await think_translation_done.wait()
                     idx = 0
                     while True:
                         # Wait for the next chunk queue to appear
@@ -1258,21 +1478,145 @@ async def process_streaming_chat(
             # Start ordered output consumer
             output_task = asyncio.create_task(_ordered_output_consumer())
 
+            # ── Thinking translation pipeline (same chunked pattern as main response) ──
+            think_para_buf = ParagraphBuffer()
+            think_chunk_queues: list[asyncio.Queue[Optional[str]]] = []
+            think_all_submitted = asyncio.Event()
+            think_translation_done = asyncio.Event()   # gates output consumer
+            think_pipeline_error: list[Exception] = []
+            think_source_chunks: list[str] = []
+            thinking_started = False
+
+            async def _translate_think_chunk(
+                chunk: str,
+                token_queue: asyncio.Queue[Optional[str]],
+                context_hint: str,
+            ):
+                """Translate a single thinking chunk, pushing tokens into its queue."""
+                try:
+                    trailing_sep = "\n\n" if chunk.endswith("\n\n") else ""
+                    if translation_method == 'llm':
+                        chunk_translated = ""
+                        async for tok in _strip_think_tags(_stream_translation(
+                            translator, chunk,
+                            processing_language, target_language,
+                            cancelled=cancelled,
+                            context_hint=context_hint,
+                            user_query=_user_query_ref,
+                        )):
+                            chunk_translated += tok
+                            await token_queue.put(tok)
+                        if trailing_sep and not chunk_translated.endswith("\n\n"):
+                            await token_queue.put(trailing_sep)
+                    else:
+                        translated_chunk = await asyncio.to_thread(
+                            translator.translate,
+                            chunk, processing_language, target_language, 'google'
+                        )
+                        if trailing_sep and not translated_chunk.endswith("\n\n"):
+                            translated_chunk += trailing_sep
+                        await token_queue.put(translated_chunk)
+                except Exception as exc:
+                    await token_queue.put(exc)
+                finally:
+                    await token_queue.put(None)
+
+            def _submit_think_chunk(chunk: str):
+                context_hint = "".join(think_source_chunks)[-300:] if think_source_chunks else ""
+                think_source_chunks.append(chunk)
+                q: asyncio.Queue[Optional[str]] = asyncio.Queue()
+                think_chunk_queues.append(q)
+                asyncio.create_task(_translate_think_chunk(chunk, q, context_hint))
+
+            async def _think_output_consumer():
+                """Stream translated thinking tokens to the frontend in chunk order.
+                Sets think_translation_done when finished so the response output
+                consumer can start immediately — no need to wait for inference to end."""
+                try:
+                    idx = 0
+                    while True:
+                        while idx >= len(think_chunk_queues):
+                            if think_all_submitted.is_set() and idx >= len(think_chunk_queues):
+                                return
+                            await asyncio.sleep(0.02)
+                        q = think_chunk_queues[idx]
+                        while True:
+                            item = await q.get()
+                            if item is None:
+                                break
+                            if isinstance(item, Exception):
+                                raise item
+                            await _send(StreamingMessage(
+                                type="thinking_translation_chunk",
+                                step="output_translation",
+                                content=item,
+                                metadata={"is_final": False}
+                            ))
+                        idx += 1
+                except Exception as exc:
+                    think_pipeline_error.append(exc)
+                finally:
+                    await _send(StreamingMessage(
+                        type="thinking_translation_complete",
+                        step="output_translation", content=""
+                    ))
+                    think_translation_done.set()
+
+            think_output_task: Optional[asyncio.Task] = None
+
             # Producer: inference loop — stream to right column + feed paragraph buffer
-            async for token in _stream_inference(
+            # Think-tag separation: thinking tokens are sent separately, not fed to translation
+            in_thinking = False
+            raw_inference = _stream_inference(
                 questioner, processed_input, response_type,
                 conversation_history=conversation_history or None,
                 system_prompt_override=routed_system_prompt,
                 cancelled=cancelled,
-            ):
-                processed_response += token
-                await _send(StreamingMessage(
-                    type="processing_chunk", step="inference",
-                    content=token, metadata={"is_final": False}
-                ))
-                flushed = para_buf.feed(token)
-                if flushed is not None:
-                    _submit_chunk(flushed)
+            )
+            async for token in _split_think_tags(raw_inference):
+                if token == _THINK_START:
+                    in_thinking = True
+                    thinking_started = True
+                    await _send(StreamingMessage(
+                        type="thinking_start", step="inference", content=""
+                    ))
+                    await _send(StreamingMessage(
+                        type="thinking_translation_start", step="output_translation", content=""
+                    ))
+                    think_output_task = asyncio.create_task(_think_output_consumer())
+                    continue
+                if token == _THINK_END:
+                    in_thinking = False
+                    await _send(StreamingMessage(
+                        type="thinking_complete", step="inference", content=""
+                    ))
+                    # Flush remaining thinking buffer
+                    remaining_think = think_para_buf.flush()
+                    if remaining_think is not None:
+                        _submit_think_chunk(remaining_think)
+                    think_all_submitted.set()
+                    continue
+                if in_thinking:
+                    await _send(StreamingMessage(
+                        type="thinking_chunk", step="inference",
+                        content=token, metadata={"is_final": False}
+                    ))
+                    # Feed thinking paragraph buffer — translate as chunks accumulate
+                    flushed_think = think_para_buf.feed(token)
+                    if flushed_think is not None:
+                        _submit_think_chunk(flushed_think)
+                else:
+                    # No thinking at all — unblock output consumer immediately
+                    if not thinking_started and not think_translation_done.is_set():
+                        think_translation_done.set()
+                    processed_response += token
+                    await _send(StreamingMessage(
+                        type="processing_chunk", step="inference",
+                        content=token, metadata={"is_final": False}
+                    ))
+                    flushed = para_buf.feed(token)
+                    if flushed is not None:
+                        _submit_chunk(flushed)
 
             await _send(StreamingMessage(
                 type="processing_complete", step="inference",
@@ -1280,14 +1624,27 @@ async def process_streaming_chat(
                 metadata={"processing_language": processing_language}
             ))
 
-            # Flush remaining buffer
+            # Flush remaining response buffer
             remaining = para_buf.flush()
             if remaining is not None:
                 _submit_chunk(remaining)
             all_chunks_submitted.set()
 
-            # Wait for all output to be streamed
+            # Ensure think_translation_done is set for non-thinking models
+            # (thinking models set it inside _think_output_consumer)
+            if not think_translation_done.is_set():
+                think_translation_done.set()
+
+            # Wait for all response output to be streamed
             await output_task
+
+            # Wait for thinking translation task to fully finish (cleanup)
+            if think_output_task:
+                if not think_all_submitted.is_set():
+                    think_all_submitted.set()
+                await think_output_task
+                if think_pipeline_error:
+                    logger.warning(f"Thinking translation error: {think_pipeline_error[0]}")
             if pipeline_error:
                 raise pipeline_error[0]
 
