@@ -37,7 +37,8 @@ const renderHint = (hint: string) => {
 const InputBar: React.FC<InputBarProps> = ({ onSend, disabled, sourceLanguage }) => {
   const [message,   setMessage]   = useState('');
   const [isFocused, setIsFocused] = useState(false);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const textareaRef  = useRef<HTMLTextAreaElement>(null);
+  const composingRef = useRef(false);  // track IME composition state
   const t = getT(sourceLanguage);
 
   const handleSend = () => {
@@ -51,7 +52,8 @@ const InputBar: React.FC<InputBarProps> = ({ onSend, disabled, sourceLanguage })
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+    // Block send during IME composition (e.g. pinyin selecting a character with Enter)
+    if (e.key === 'Enter' && !e.shiftKey && !composingRef.current && !e.nativeEvent.isComposing) {
       e.preventDefault();
       handleSend();
     }
@@ -101,6 +103,13 @@ const InputBar: React.FC<InputBarProps> = ({ onSend, disabled, sourceLanguage })
             value={message}
             onChange={handleInput}
             onKeyDown={handleKeyDown}
+            onCompositionStart={() => { composingRef.current = true; }}
+            onCompositionEnd={() => {
+              // Safari fires compositionend BEFORE keydown, so delaying the
+              // reset ensures the Enter keydown that confirms the IME selection
+              // still sees composingRef === true and won't trigger send.
+              requestAnimationFrame(() => { composingRef.current = false; });
+            }}
             onFocus={() => setIsFocused(true)}
             onBlur={() => setIsFocused(false)}
             placeholder={t.inputPlaceholder}

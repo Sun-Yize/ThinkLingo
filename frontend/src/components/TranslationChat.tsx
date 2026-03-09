@@ -135,6 +135,7 @@ function generateId(): string {
 const TranslationChat: React.FC = () => {
   const [turns, setTurns]               = useState<ConversationTurn[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [scrollTrigger, setScrollTrigger] = useState(0);
   const [settingsOpen, setSettingsOpen]     = useState(false);
   const [apiConfigOpen, setApiConfigOpen]   = useState(false);
   const [historyOpen, setHistoryOpen]       = useState(false);
@@ -472,23 +473,34 @@ const TranslationChat: React.FC = () => {
   };
 
   const connectWebSocket = useCallback(() => {
+    // Close any existing connection before opening a new one
+    if (wsRef.current) {
+      wsRef.current.onclose = null;  // prevent reconnect loop
+      wsRef.current.close();
+      wsRef.current = null;
+    }
+
     const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const isDev = process.env.NODE_ENV === 'development';
     const wsHost = isDev ? `${window.location.hostname}:8000` : window.location.host;
     const wsToken = _getWsToken();
     const wsUrl = `${wsProtocol}//${wsHost}/ws/chat${wsToken ? `?token=${encodeURIComponent(wsToken)}` : ''}`;
 
-    wsRef.current = new WebSocket(wsUrl);
-    wsRef.current.onopen    = () => console.log('WebSocket connected');
-    wsRef.current.onmessage = (event) => {
+    const ws = new WebSocket(wsUrl);
+    wsRef.current = ws;
+    ws.onopen    = () => console.log('WebSocket connected');
+    ws.onmessage = (event) => {
       const msg: WebSocketMessage = JSON.parse(event.data);
       handleWsMessageRef.current(msg);
     };
-    wsRef.current.onclose = () => {
+    ws.onclose = () => {
       console.log('WebSocket disconnected');
-      if (isMountedRef.current) setTimeout(connectWebSocket, 3000);
+      // Only reconnect if this is still the active connection and component is mounted
+      if (isMountedRef.current && wsRef.current === ws) {
+        setTimeout(connectWebSocket, 3000);
+      }
     };
-    wsRef.current.onerror = (err) => console.error('WebSocket error:', err);
+    ws.onerror = (err) => console.error('WebSocket error:', err);
   }, []);
 
   const getActiveStream = (): StreamContext | null => streamQueueRef.current[0] ?? null;
@@ -505,8 +517,14 @@ const TranslationChat: React.FC = () => {
     } else {
       setTurns(prev => {
         if (prev.length === 0) return prev;
-        const next = [...prev];
-        next[next.length - 1] = { ...next[next.length - 1], ...patch };
+        const last = prev[prev.length - 1];
+        // Skip update if all patched values are already identical
+        const changed = (Object.keys(patch) as (keyof ConversationTurn)[]).some(
+          k => patch[k] !== last[k],
+        );
+        if (!changed) return prev;
+        const next = prev.slice();
+        next[next.length - 1] = { ...last, ...patch };
         return next;
       });
     }
@@ -689,6 +707,7 @@ const TranslationChat: React.FC = () => {
 
     setTurns(prev => [...prev, newTurn]);
     setIsProcessing(true);
+    setScrollTrigger(n => n + 1);
     setQuotaRemaining(prev => prev !== null ? Math.max(0, prev - 1) : prev);
 
     wsRef.current.send(JSON.stringify({
@@ -831,7 +850,7 @@ const TranslationChat: React.FC = () => {
 
       {/* ── Dual-column conversation ───────────────────────────────── */}
       <div className="flex-1 overflow-hidden">
-        <DualColumnView turns={turns} settings={settings} languages={languages} />
+        <DualColumnView turns={turns} settings={settings} languages={languages} scrollTrigger={scrollTrigger} />
       </div>
 
       {/* ── Input bar ─────────────────────────────────────────────── */}

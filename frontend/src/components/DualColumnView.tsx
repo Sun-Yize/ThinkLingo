@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { ConversationTurn, Language, ChatSettings, ColumnFocus } from '../types/chat';
 import { getT } from '../utils/i18n';
 import TurnRow from './TurnRow';
@@ -7,6 +7,7 @@ interface DualColumnViewProps {
   turns: ConversationTurn[];
   settings: ChatSettings;
   languages: Language[];
+  scrollTrigger?: number;
 }
 
 const langCode: Record<string, string> = {
@@ -30,7 +31,7 @@ const useIsMobile = (breakpoint = 768) => {
   return isMobile;
 };
 
-const DualColumnView: React.FC<DualColumnViewProps> = ({ turns, settings, languages }) => {
+const DualColumnView: React.FC<DualColumnViewProps> = ({ turns, settings, languages, scrollTrigger }) => {
   const isMobile = useIsMobile();
   const [columnFocus, setColumnFocus]  = useState<ColumnFocus>(() =>
     typeof window !== 'undefined' && window.innerWidth < 768 ? 'left' : 'both'
@@ -66,11 +67,30 @@ const DualColumnView: React.FC<DualColumnViewProps> = ({ turns, settings, langua
     // scrollingUp=false but not near bottom = programmatic smooth-scroll in progress → ignore
   };
 
+  // Throttled auto-scroll: at most once per animation frame to avoid
+  // layout thrashing when tokens arrive faster than the screen refreshes.
+  const scrollRafRef = useRef<number | null>(null);
+  const scrollToBottom = useCallback(() => {
+    if (scrollRafRef.current !== null) return; // already scheduled
+    scrollRafRef.current = requestAnimationFrame(() => {
+      scrollRafRef.current = null;
+      if (!userScrolledUpRef.current) {
+        bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+      }
+    });
+  }, []);
+
   useEffect(() => {
-    if (!userScrolledUpRef.current) {
-      bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    scrollToBottom();
+  }, [turns, scrollToBottom]);
+
+  // Force-scroll to bottom when user sends a message (even if they scrolled up)
+  useEffect(() => {
+    if (scrollTrigger) {
+      userScrolledUpRef.current = false;
+      scrollToBottom();
     }
-  }, [turns]);
+  }, [scrollTrigger, scrollToBottom]);
 
   const t = getT(settings.sourceLanguage);
 
@@ -291,4 +311,4 @@ const DualColumnView: React.FC<DualColumnViewProps> = ({ turns, settings, langua
   );
 };
 
-export default DualColumnView;
+export default React.memo(DualColumnView);

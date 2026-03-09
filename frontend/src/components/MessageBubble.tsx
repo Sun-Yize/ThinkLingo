@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { getT } from '../utils/i18n';
@@ -74,7 +74,7 @@ const extractText = (node: React.ReactNode): string => {
   return '';
 };
 
-// Custom <pre> renderer with copy button overlay
+// Custom <pre> renderer with copy button overlay — defined outside component to keep stable reference
 const PreWithCopy: React.FC<React.HTMLAttributes<HTMLPreElement>> = ({ children, ...props }) => {
   const code = extractText(children).replace(/\n$/, '');
   return (
@@ -85,11 +85,30 @@ const PreWithCopy: React.FC<React.HTMLAttributes<HTMLPreElement>> = ({ children,
   );
 };
 
+// Stable components object for ReactMarkdown — avoids re-creating on every render
+const markdownComponents = { pre: PreWithCopy };
+
+// Stable plugins array
+const remarkPlugins = [remarkGfm];
+
 // Sparkle icon — signals AI role, no emoji
 const SparkleIcon: React.FC<{ className?: string }> = ({ className }) => (
   <svg className={className} viewBox="0 0 20 20" fill="currentColor">
     <path d="M15.98 1.804a1 1 0 00-1.96 0l-.24 1.192a1 1 0 01-.784.785l-1.192.238a1 1 0 000 1.962l1.192.238a1 1 0 01.785.785l.238 1.192a1 1 0 001.962 0l.238-1.192a1 1 0 01.785-.785l1.192-.238a1 1 0 000-1.962l-1.192-.238a1 1 0 01-.785-.785l-.238-1.192zM6.949 5.684a1 1 0 00-1.898 0l-.683 2.051a1 1 0 01-.633.633l-2.051.683a1 1 0 000 1.898l2.051.684a1 1 0 01.633.632l.683 2.051a1 1 0 001.898 0l.683-2.051a1 1 0 01.633-.633l2.051-.683a1 1 0 000-1.898l-2.051-.683a1 1 0 01-.633-.633L6.95 5.684z" />
   </svg>
+);
+
+// AI badge components — defined outside to keep stable references
+const AIBadgeDefault = (
+  <div className="flex-shrink-0 mt-[2px] w-[18px] h-[18px] rounded-[5px] flex items-center justify-center border bg-violet-500/[0.10] border-violet-500/[0.18]">
+    <SparkleIcon className="w-2.5 h-2.5 text-violet-400/60" />
+  </div>
+);
+
+const AIBadgeProcessing = (
+  <div className="flex-shrink-0 mt-[2px] w-[18px] h-[18px] rounded-[5px] flex items-center justify-center border bg-cyan-500/[0.08] border-cyan-500/[0.16]">
+    <SparkleIcon className="w-2.5 h-2.5 text-cyan-400/55" />
+  </div>
 );
 
 const MessageBubble: React.FC<MessageBubbleProps> = ({
@@ -106,20 +125,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
 
   if (status === 'idle') return null;
 
-  // ── AI indicator badge (shared between states) ───────────────────
-  const AIBadge = (
-    <div
-      className={`flex-shrink-0 mt-[2px] w-[18px] h-[18px] rounded-[5px] flex items-center justify-center border ${
-        isProcessing
-          ? 'bg-cyan-500/[0.08] border-cyan-500/[0.16]'
-          : 'bg-violet-500/[0.10] border-violet-500/[0.18]'
-      }`}
-    >
-      <SparkleIcon
-        className={`w-2.5 h-2.5 ${isProcessing ? 'text-cyan-400/55' : 'text-violet-400/60'}`}
-      />
-    </div>
-  );
+  const AIBadge = isProcessing ? AIBadgeProcessing : AIBadgeDefault;
 
   // ── Translating / pending skeleton ──────────────────────────────
   if (status === 'pending' || status === 'translating') {
@@ -181,14 +187,25 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
             : ''
         }`}
       >
-        <div className="markdown-body">
-          <ReactMarkdown remarkPlugins={[remarkGfm]} components={{ pre: PreWithCopy }}>
-            {content || (status === 'streaming' ? '\u200b' : '')}
-          </ReactMarkdown>
-        </div>
+        <MemoizedMarkdown content={content} status={status} />
       </div>
     </div>
   );
 };
 
-export default MessageBubble;
+// Memoized markdown renderer — only re-parses when content actually changes
+const MemoizedMarkdown: React.FC<{ content: string; status: BubbleStatus }> = React.memo(
+  ({ content, status }) => {
+    const rendered = useMemo(
+      () => (
+        <ReactMarkdown remarkPlugins={remarkPlugins} components={markdownComponents}>
+          {content || (status === 'streaming' ? '\u200b' : '')}
+        </ReactMarkdown>
+      ),
+      [content, status],
+    );
+    return <div className="markdown-body">{rendered}</div>;
+  },
+);
+
+export default React.memo(MessageBubble);

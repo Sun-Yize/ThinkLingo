@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { ConversationTurn, ColumnFocus } from '../types/chat';
 import MessageBubble from './MessageBubble';
 import { getT } from '../utils/i18n';
@@ -9,24 +9,34 @@ interface TurnRowProps {
   columnFocus: ColumnFocus;
 }
 
+// Pre-computed grid styles to avoid creating new objects on every render
+const GRID_STYLES: Record<ColumnFocus, React.CSSProperties> = {
+  left:  { gridTemplateColumns: '100% 0%',  transition: 'grid-template-columns 260ms ease-in-out' },
+  right: { gridTemplateColumns: '0% 100%',  transition: 'grid-template-columns 260ms ease-in-out' },
+  both:  { gridTemplateColumns: '50% 50%',  transition: 'grid-template-columns 260ms ease-in-out' },
+};
+
 const TurnRow: React.FC<TurnRowProps> = ({ turn, sourceLanguage, columnFocus }) => {
   const t = getT(sourceLanguage);
-  const gridCols =
-    columnFocus === 'left'  ? '100% 0%'  :
-    columnFocus === 'right' ? '0% 100%'  :
-    '50% 50%';
 
   const leftHidden  = columnFocus === 'right';
   const rightHidden = columnFocus === 'left';
   const showDivider = columnFocus === 'both';
 
+  // Stable statusHint — only recompute when relevant statuses change
+  const statusHint = useMemo(() => {
+    if (turn.leftAiStatus === 'pending') {
+      if (turn.rightAiStatus === 'streaming') return t.thinking;
+      if (turn.rightUserStatus === 'translating' || turn.rightUserStatus === 'streaming') return t.translating;
+    }
+    if (turn.leftAiStatus === 'streaming') return t.translatingOutput;
+    return undefined;
+  }, [turn.leftAiStatus, turn.rightAiStatus, turn.rightUserStatus, t]);
+
   return (
     <div
       className="relative grid group turn-row"
-      style={{
-        gridTemplateColumns: gridCols,
-        transition: 'grid-template-columns 260ms ease-in-out',
-      }}
+      style={GRID_STYLES[columnFocus]}
     >
       {/* Left column — source language */}
       <div
@@ -52,17 +62,7 @@ const TurnRow: React.FC<TurnRowProps> = ({ turn, sourceLanguage, columnFocus }) 
               status={turn.leftAiStatus}
               sourceLanguage={sourceLanguage}
               variant="default"
-              statusHint={
-                turn.leftAiStatus === 'pending'
-                  ? turn.rightAiStatus === 'streaming'
-                    ? t.thinking
-                    : turn.rightUserStatus === 'translating' || turn.rightUserStatus === 'streaming'
-                      ? t.translating
-                      : undefined
-                  : turn.leftAiStatus === 'streaming'
-                    ? t.translatingOutput
-                    : undefined
-              }
+              statusHint={statusHint}
             />
             {turn.status === 'error' && turn.error && (
               <p className="text-[12px] text-red-400/75 mt-0.5 pl-[28px]">{turn.error}</p>
@@ -160,4 +160,4 @@ const TurnRow: React.FC<TurnRowProps> = ({ turn, sourceLanguage, columnFocus }) 
   );
 };
 
-export default TurnRow;
+export default React.memo(TurnRow);
