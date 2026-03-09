@@ -235,6 +235,50 @@ _MAX_CONNECTIONS_PER_IP = int(os.getenv("MAX_WS_CONNECTIONS_PER_IP", "5"))
 _STREAM_QUEUE_MAXSIZE = 2000  # backpressure: max buffered tokens per stream
 _WS_RATE_LIMIT_PER_SEC = int(os.getenv("WS_RATE_LIMIT_PER_SEC", "5"))  # max messages per second per connection
 
+# --- Paragraph-aware buffer for chunked translation ---
+_MIN_FLUSH_LINES = 5    # minimum newlines before considering a flush
+_MIN_FLUSH_CHARS = 500  # OR minimum characters before considering a flush
+
+class ParagraphBuffer:
+    """Accumulates inference tokens and flushes at paragraph boundaries."""
+
+    def __init__(self, min_lines: int = _MIN_FLUSH_LINES, min_chars: int = _MIN_FLUSH_CHARS):
+        self._buf = ""
+        self._min_lines = min_lines
+        self._min_chars = min_chars
+        self._fence_open = False  # inside a fenced code block?
+
+    def feed(self, token: str) -> Optional[str]:
+        """Feed a token. Returns a chunk to translate if a flush point is reached."""
+        self._buf += token
+        # Track fenced code blocks (``` toggles)
+        for line in token.split('\n'):
+            if line.strip().startswith('```'):
+                self._fence_open = not self._fence_open
+        # Never flush inside a code fence
+        if self._fence_open:
+            return None
+        # Need at least min_lines OR min_chars
+        if self._buf.count('\n') < self._min_lines and len(self._buf) < self._min_chars:
+            return None
+        # Look for the last paragraph boundary (double newline)
+        idx = self._buf.rfind('\n\n')
+        if idx < 0:
+            return None
+        # Split: flush everything up to and including the \n\n
+        chunk = self._buf[:idx + 2]
+        self._buf = self._buf[idx + 2:]
+        return chunk
+
+    def flush(self) -> Optional[str]:
+        """Flush any remaining buffered text."""
+        if self._buf:
+            chunk = self._buf
+            self._buf = ""
+            return chunk
+        return None
+
+
 # Global orchestrator instance
 orchestrator = None
 
@@ -244,7 +288,6 @@ _template_registry = TemplateRegistry()
 _DEFAULT_MODELS = {
     'deepseek': 'deepseek-chat',
     'openai':   'gpt-4o-mini',
-    'gpt35':    'gpt-3.5-turbo',
     'claude':   'claude-opus-4-6',
     'gemini':   'gemini-3.1-pro-preview',
     'qwen':     'qwen3.5-plus',
@@ -382,7 +425,6 @@ def _resolve_llm_for_title(data: dict):
     keys = {
         'deepseek': (data.get('deepseek_api_key') or '').strip(),
         'openai':   (data.get('openai_api_key') or '').strip(),
-        'gpt35':    (data.get('openai_api_key') or '').strip(),
         'claude':   (data.get('anthropic_api_key') or '').strip(),
         'gemini':   (data.get('google_api_key') or '').strip(),
         'qwen':     (data.get('qwen_api_key') or '').strip(),
@@ -457,9 +499,7 @@ class ConnectionManager:
         self._max_per_ip = max_per_ip
 
     def _client_ip(self, websocket: WebSocket) -> str:
-        if websocket.client:
-            return websocket.client.host
-        return "unknown"
+        return _get_client_ip(websocket)
 
     async def connect(self, websocket: WebSocket) -> bool:
         """Accept and track connection. Returns False if limits exceeded."""
@@ -596,6 +636,8 @@ async def websocket_chat_endpoint(websocket: WebSocket):
 async def _stream_translation(
     translator, text: str, source_language: str, target_language: str,
     cancelled: Optional[threading.Event] = None,
+    context_hint: str = "",
+    user_query: str = "",
 ):
     """
     Async generator that wraps the synchronous LLM streaming translation generator.
@@ -608,7 +650,10 @@ async def _stream_translation(
 
     def _producer():
         try:
-            for token in translator.stream_translate(text, source_language, target_language):
+            for token in translator.stream_translate(
+                text, source_language, target_language,
+                context_hint=context_hint, user_query=user_query,
+            ):
                 if cancelled and cancelled.is_set():
                     break
                 asyncio.run_coroutine_threadsafe(queue.put(token), loop).result()
@@ -748,7 +793,6 @@ def _resolve_agents(request_data: Dict[str, Any]):
     _key_map: Dict[str, str] = {
         'deepseek': deepseek_key,
         'openai':   openai_key,
-        'gpt35':    openai_key,
         'claude':   anthropic_key,
         'gemini':   google_key,
         'qwen':     qwen_key,
@@ -1024,7 +1068,7 @@ async def process_streaming_chat(
                 metadata={"original": message, "translated": processed_input, "skipped": True}
             ))
 
-        # Step 2: Real streaming inference — tokens arrive as the LLM generates them
+        # Step 2 + 3: Streaming inference with concurrent paragraph-chunked translation
         await _send(StreamingMessage(
             type="processing_start",
             step="inference",
@@ -1032,85 +1076,180 @@ async def process_streaming_chat(
             metadata={"processing_language": processing_language}
         ))
 
+        needs_translation = processing_language != target_language
         processed_response = ""
-        async for token in _stream_inference(
-            questioner, processed_input, response_type,
-            conversation_history=conversation_history or None,
-            system_prompt_override=routed_system_prompt,
-            cancelled=cancelled,
-        ):
-            processed_response += token
+
+        if not needs_translation:
+            # No translation needed — simple streaming loop
+            async for token in _stream_inference(
+                questioner, processed_input, response_type,
+                conversation_history=conversation_history or None,
+                system_prompt_override=routed_system_prompt,
+                cancelled=cancelled,
+            ):
+                processed_response += token
+                await _send(StreamingMessage(
+                    type="processing_chunk", step="inference",
+                    content=token, metadata={"is_final": False}
+                ))
+
             await _send(StreamingMessage(
-                type="processing_chunk",
-                step="inference",
-                content=token,
-                metadata={"is_final": False}
+                type="processing_complete", step="inference",
+                content=processed_response,
+                metadata={"processing_language": processing_language}
             ))
 
-        await _send(StreamingMessage(
-            type="processing_complete",
-            step="inference",
-            content=processed_response,
-            metadata={"processing_language": processing_language}
-        ))
-
-        # Step 3: Output translation (if needed)
-        if processing_language != target_language:
-            if translation_method == 'llm':
-                # LLM translation — stream tokens to the frontend in real time
-                final_response = ""
-                async for token in _stream_translation(
-                    translator, processed_response, processing_language, target_language,
-                    cancelled=cancelled,
-                ):
-                    final_response += token
-                    await _send(StreamingMessage(
-                        type="output_translation_chunk",
-                        step="output_translation",
-                        content=token,
-                        metadata={"is_final": False}
-                    ))
-                await _send(StreamingMessage(
-                    type="final_translation",
-                    step="output_translation",
-                    content=final_response,
-                    metadata={"original": processed_response, "translated": final_response}
-                ))
-            else:
-                # Google translate — batch, notify start then send result
-                await _send(StreamingMessage(
-                    type="translation_start",
-                    step="output_translation",
-                    content=f"Translating from {processing_language} to {target_language}...",
-                    metadata={"from": processing_language, "to": target_language}
-                ))
-
-                try:
-                    translated_out = await asyncio.to_thread(
-                        translator.translate,
-                        processed_response, processing_language, target_language, 'google'
-                    )
-                    translation_result = {"success": True, "translated_text": translated_out}
-                except Exception as _te:
-                    translation_result = {"success": False, "error": str(_te)}
-
-                if translation_result["success"]:
-                    final_response = translation_result["translated_text"]
-                    await _send(StreamingMessage(
-                        type="final_translation",
-                        step="output_translation",
-                        content=final_response,
-                        metadata={"original": processed_response, "translated": final_response}
-                    ))
-                else:
-                    raise Exception(f"Output translation failed: {translation_result.get('error', 'Unknown error')}")
-        else:
             final_response = processed_response
             await _send(StreamingMessage(
-                type="final_translation",
-                step="output_translation",
+                type="final_translation", step="output_translation",
                 content=final_response,
                 metadata={"original": processed_response, "translated": final_response, "skipped": True}
+            ))
+        else:
+            # Concurrent pipeline: inference produces paragraph chunks,
+            # each chunk is translated in parallel, output is streamed in order.
+            #
+            # Architecture:
+            #   Inference → ParagraphBuffer → chunk ready → start translation task immediately
+            #   Each task buffers tokens into its own asyncio.Queue
+            #   Output consumer drains chunk queues IN ORDER → WebSocket
+            #
+            # Result: chunk N+1 can translate while chunk N is still streaming
+            # to the frontend, but the user always sees output in correct order.
+
+            para_buf = ParagraphBuffer()
+            translated_parts: list[str] = []
+            pipeline_error: list[Exception] = []
+
+            # Ordered list of per-chunk token queues; None sentinel = chunk done
+            chunk_token_queues: list[asyncio.Queue[Optional[str]]] = []
+            # Event signalling that all chunks have been submitted
+            all_chunks_submitted = asyncio.Event()
+
+            # The user's original question in the source (target) language,
+            # used as reference for proper nouns / names during back-translation.
+            _user_query_ref = message if target_language != processing_language else ""
+
+            async def _translate_chunk_task(
+                chunk: str,
+                token_queue: asyncio.Queue[Optional[str]],
+                context_hint: str,
+            ):
+                """Translate a single chunk, pushing tokens into its queue."""
+                try:
+                    trailing_sep = "\n\n" if chunk.endswith("\n\n") else ""
+                    if translation_method == 'llm':
+                        chunk_translated = ""
+                        async for tok in _stream_translation(
+                            translator, chunk,
+                            processing_language, target_language,
+                            cancelled=cancelled,
+                            context_hint=context_hint,
+                            user_query=_user_query_ref,
+                        ):
+                            chunk_translated += tok
+                            await token_queue.put(tok)
+                        # Restore paragraph break if LLM stripped it
+                        if trailing_sep and not chunk_translated.endswith("\n\n"):
+                            await token_queue.put(trailing_sep)
+                    else:
+                        # Google translate — batch
+                        translated_chunk = await asyncio.to_thread(
+                            translator.translate,
+                            chunk, processing_language, target_language, 'google'
+                        )
+                        if trailing_sep and not translated_chunk.endswith("\n\n"):
+                            translated_chunk += trailing_sep
+                        await token_queue.put(translated_chunk)
+                except Exception as exc:
+                    await token_queue.put(exc)
+                finally:
+                    await token_queue.put(None)  # sentinel: this chunk is done
+
+            # Track all flushed source chunks for building context hints
+            _source_chunks_so_far: list[str] = []
+
+            def _submit_chunk(chunk: str):
+                """Start a parallel translation task for a chunk."""
+                # Use previously flushed source text (not translated text) as context,
+                # since translations may still be in-flight due to parallelism.
+                context_hint = "".join(_source_chunks_so_far)[-300:] if _source_chunks_so_far else ""
+                _source_chunks_so_far.append(chunk)
+                q: asyncio.Queue[Optional[str]] = asyncio.Queue()
+                chunk_token_queues.append(q)
+                asyncio.create_task(_translate_chunk_task(chunk, q, context_hint))
+
+            async def _ordered_output_consumer():
+                """Stream translated tokens to the frontend in chunk order."""
+                try:
+                    idx = 0
+                    while True:
+                        # Wait for the next chunk queue to appear
+                        while idx >= len(chunk_token_queues):
+                            if all_chunks_submitted.is_set() and idx >= len(chunk_token_queues):
+                                return  # no more chunks
+                            await asyncio.sleep(0.02)
+                        q = chunk_token_queues[idx]
+                        chunk_result = ""
+                        while True:
+                            item = await q.get()
+                            if item is None:
+                                break  # chunk complete
+                            if isinstance(item, Exception):
+                                raise item
+                            chunk_result += item
+                            await _send(StreamingMessage(
+                                type="output_translation_chunk",
+                                step="output_translation",
+                                content=item,
+                                metadata={"is_final": False}
+                            ))
+                        translated_parts.append(chunk_result)
+                        idx += 1
+                except Exception as exc:
+                    pipeline_error.append(exc)
+
+            # Start ordered output consumer
+            output_task = asyncio.create_task(_ordered_output_consumer())
+
+            # Producer: inference loop — stream to right column + feed paragraph buffer
+            async for token in _stream_inference(
+                questioner, processed_input, response_type,
+                conversation_history=conversation_history or None,
+                system_prompt_override=routed_system_prompt,
+                cancelled=cancelled,
+            ):
+                processed_response += token
+                await _send(StreamingMessage(
+                    type="processing_chunk", step="inference",
+                    content=token, metadata={"is_final": False}
+                ))
+                flushed = para_buf.feed(token)
+                if flushed is not None:
+                    _submit_chunk(flushed)
+
+            await _send(StreamingMessage(
+                type="processing_complete", step="inference",
+                content=processed_response,
+                metadata={"processing_language": processing_language}
+            ))
+
+            # Flush remaining buffer
+            remaining = para_buf.flush()
+            if remaining is not None:
+                _submit_chunk(remaining)
+            all_chunks_submitted.set()
+
+            # Wait for all output to be streamed
+            await output_task
+            if pipeline_error:
+                raise pipeline_error[0]
+
+            final_response = "".join(translated_parts)
+            await _send(StreamingMessage(
+                type="final_translation", step="output_translation",
+                content=final_response,
+                metadata={"original": processed_response, "translated": final_response}
             ))
 
     except Exception as e:

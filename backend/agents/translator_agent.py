@@ -176,9 +176,21 @@ class TranslatorAgent:
             logger.error(f"LLM translation from {source_display} to {target_display} failed: {str(e)}")
             return text
 
-    def stream_translate(self, text: str, source_language: str, target_language: str) -> Generator[str, None, None]:
+    def stream_translate(
+        self, text: str, source_language: str, target_language: str,
+        context_hint: str = "",
+        user_query: str = "",
+    ) -> Generator[str, None, None]:
         """
         LLM-based streaming translation. Only called when method='llm'.
+
+        Args:
+            text: Text to translate.
+            source_language: Source language key.
+            target_language: Target language key.
+            context_hint: Preceding original text (tail) for consistency.
+            user_query: The user's original question in the target language,
+                        used as reference for proper nouns, names, etc.
 
         Yields:
             Translation tokens as they are generated.
@@ -187,6 +199,19 @@ class TranslatorAgent:
         target_display = self.language_config.get_language_display_name(target_language)
 
         system_prompt = self._build_llm_translation_prompt(source_display, target_display)
+        if user_query:
+            system_prompt += (
+                f"\n5. The user's original question in {target_display} was: \"{user_query}\" "
+                "Use this as reference for translating proper nouns, names, and domain-specific terms back accurately."
+            )
+        if context_hint:
+            rule_num = "6" if user_query else "5"
+            system_prompt += (
+                f"\n{rule_num}. Context: You are translating a segment from a longer text. "
+                f"The preceding original text was: \"{context_hint}\" "
+                "Maintain consistent terminology, tone, and style. "
+                "Do NOT translate the preceding text — translate ONLY the new segment below."
+            )
         user_prompt = f"Translate this {source_display} text to {target_display}:\n\n{text}"
 
         try:
