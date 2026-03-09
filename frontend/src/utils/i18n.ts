@@ -1,6 +1,8 @@
 export interface UIText {
   // Header / navigation
   appTitle: string;
+  appTagline: string;
+  languageNames: Record<string, string>;
   settings: string;
 
   // Settings modal
@@ -65,6 +67,8 @@ export interface UIText {
 const texts: Record<string, UIText> = {
   english: {
     appTitle: 'ThinkLingo',
+    appTagline: 'Ask in {source}, Think in {processing}',
+    languageNames: { english: 'English', chinese: 'Chinese', japanese: 'Japanese', korean: 'Korean' },
     settings: 'Settings',
 
     sourceLanguage: 'Source Language',
@@ -126,6 +130,8 @@ const texts: Record<string, UIText> = {
 
   chinese: {
     appTitle: 'ThinkLingo',
+    appTagline: '用{source}提问，用{processing}思考',
+    languageNames: { english: '英文', chinese: '中文', japanese: '日文', korean: '韩文' },
     settings: '设置',
 
     sourceLanguage: '源语言',
@@ -187,6 +193,8 @@ const texts: Record<string, UIText> = {
 
   japanese: {
     appTitle: 'ThinkLingo',
+    appTagline: '{source}で質問、{processing}で思考',
+    languageNames: { english: '英語', chinese: '中国語', japanese: '日本語', korean: '韓国語' },
     settings: '設定',
 
     sourceLanguage: 'ソース言語',
@@ -248,6 +256,8 @@ const texts: Record<string, UIText> = {
 
   korean: {
     appTitle: 'ThinkLingo',
+    appTagline: '{source}로 질문하고, {processing}로 사고하다',
+    languageNames: { english: '영어', chinese: '중국어', japanese: '일본어', korean: '한국어' },
     settings: '설정',
 
     sourceLanguage: '소스 언어',

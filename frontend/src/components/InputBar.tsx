@@ -5,6 +5,7 @@ interface InputBarProps {
   onSend: (message: string) => void;
   disabled: boolean;
   sourceLanguage: string;
+  sidebarOpen?: boolean;
 }
 
 // Wrap "Shift+Enter" and "Enter" as styled <kbd> chips; keep surrounding text as-is.
@@ -34,7 +35,7 @@ const renderHint = (hint: string) => {
   });
 };
 
-const InputBar: React.FC<InputBarProps> = ({ onSend, disabled, sourceLanguage }) => {
+const InputBar: React.FC<InputBarProps> = ({ onSend, disabled, sourceLanguage, sidebarOpen = false }) => {
   const [message,   setMessage]   = useState('');
   const [isFocused, setIsFocused] = useState(false);
   const textareaRef  = useRef<HTMLTextAreaElement>(null);
@@ -69,7 +70,7 @@ const InputBar: React.FC<InputBarProps> = ({ onSend, disabled, sourceLanguage })
   const canSend = !disabled && message.trim().length > 0;
 
   return (
-    <div className="relative flex-shrink-0 bg-[rgba(10,10,18,0.88)] backdrop-blur-xl px-3 py-3 md:px-5 md:py-4" style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}>
+    <div className="relative flex-shrink-0 bg-[rgba(10,10,18,0.88)] backdrop-blur-xl px-3 py-3 md:px-5 md:py-4 flex flex-col items-center" style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}>
 
       {/* Top separator — dual-tone, matches header/column-header system */}
       <div
@@ -82,7 +83,7 @@ const InputBar: React.FC<InputBarProps> = ({ onSend, disabled, sourceLanguage })
 
       {/* Gradient border wrapper — 1 px padding acts as the border */}
       <div
-        className="p-[1px] transition-all duration-300"
+        className={`w-full p-[1px] transition-all duration-300 ${sidebarOpen ? 'max-w-6xl' : 'max-w-[92%]'}`}
         style={{
           borderRadius: '24px',
           background: disabled

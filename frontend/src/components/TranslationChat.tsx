@@ -788,15 +788,17 @@ const TranslationChat: React.FC = () => {
             </div>
           </div>
           {/* Gradient title + subtitle */}
-          <div className="flex flex-col gap-0">
+          <div className="flex flex-col gap-[1px]">
             <span
               className="text-[18px] font-bold tracking-[-0.3px] leading-tight"
               style={{ background: 'linear-gradient(90deg, #c4b5fd 0%, #f0f0ff 50%, #67e8f9 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}
             >
               {t.appTitle}
             </span>
-            <span className="hidden md:inline text-[11px] text-white/50 tracking-[0.1px] leading-tight">
-              Ask in Any Language, Think in English
+            <span className="hidden md:inline text-[11px] text-white/50 tracking-[0.1px] leading-relaxed">
+              {t.appTagline
+                .replace('{source}', t.languageNames[settings.sourceLanguage] ?? settings.sourceLanguage)
+                .replace('{processing}', t.languageNames[settings.processingLanguage] ?? settings.processingLanguage)}
             </span>
           </div>
         </div>
@@ -854,7 +856,7 @@ const TranslationChat: React.FC = () => {
       </div>
 
       {/* ── Input bar ─────────────────────────────────────────────── */}
-      <InputBar onSend={handleSend} disabled={isProcessing} sourceLanguage={settings.sourceLanguage} />
+      <InputBar onSend={handleSend} disabled={isProcessing} sourceLanguage={settings.sourceLanguage} sidebarOpen={historyOpen} />
       </div>{/* end main content column */}
 
       {/* ── Settings modal ────────────────────────────────────────── */}
