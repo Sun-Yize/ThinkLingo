@@ -30,6 +30,7 @@ class TranslationOrchestrator:
         """
         self.llm_client = llm_client
         self.translation_llm_client = translation_llm_client or llm_client
+        self.config = config
         self.translator = TranslatorAgent(self.translation_llm_client, config)
         self.questioner = QuestionerAgent(llm_client)
         self.language_config = LanguageConfig()

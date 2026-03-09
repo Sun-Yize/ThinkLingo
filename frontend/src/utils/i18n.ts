@@ -12,13 +12,15 @@ export interface UIText {
   translationMethodLLM: string;
   done: string;
 
-  // API configuration (shown only when allowUserApiKeys=true)
+  // Model / API configuration
+  modelButton: string;
   apiConfig: string;
   deepseekApiKey: string;
   openaiApiKey: string;
   mainLlmProvider: string;
   translationLlmProvider: string;
   providerAuto: string;
+  moreModelsHint: string;
 
   // Column headers
   leftColLabel: string;
@@ -73,12 +75,14 @@ const texts: Record<string, UIText> = {
     translationMethodLLM: 'LLM Translation (High quality, streaming)',
     done: 'Done',
 
-    apiConfig: 'API Configuration',
+    modelButton: 'Model',
+    apiConfig: 'Model Configuration',
     deepseekApiKey: 'DeepSeek API Key',
     openaiApiKey: 'OpenAI API Key',
     mainLlmProvider: 'Reasoning LLM',
     translationLlmProvider: 'Translation LLM',
-    providerAuto: 'Auto (use available key)',
+    providerAuto: 'Auto',
+    moreModelsHint: 'Want to use OpenAI, Claude, or other models? Deploy your own instance on',
 
     leftColLabel: 'Original / Target',
     rightColLabel: 'Processing Language',
@@ -132,12 +136,14 @@ const texts: Record<string, UIText> = {
     translationMethodLLM: 'LLM 翻译（高质量，支持流式）',
     done: '完成',
 
-    apiConfig: 'API 配置',
+    modelButton: '模型',
+    apiConfig: '模型配置',
     deepseekApiKey: 'DeepSeek API Key',
     openaiApiKey: 'OpenAI API Key',
     mainLlmProvider: '推理模型',
     translationLlmProvider: '翻译模型',
-    providerAuto: '自动（使用已填写的 Key）',
+    providerAuto: '自动',
+    moreModelsHint: '想使用 OpenAI、Claude 等更多模型？前往 GitHub 部署你自己的实例',
 
     leftColLabel: '原始 / 目标',
     rightColLabel: '处理语言',
@@ -191,12 +197,14 @@ const texts: Record<string, UIText> = {
     translationMethodLLM: 'LLM 翻訳（高品質・ストリーミング対応）',
     done: '完了',
 
-    apiConfig: 'API 設定',
+    modelButton: 'モデル',
+    apiConfig: 'モデル設定',
     deepseekApiKey: 'DeepSeek API キー',
     openaiApiKey: 'OpenAI API キー',
     mainLlmProvider: '推論モデル',
     translationLlmProvider: '翻訳モデル',
-    providerAuto: '自動（利用可能なキーを使用）',
+    providerAuto: '自動',
+    moreModelsHint: 'OpenAI や Claude など他のモデルを使いたい場合は、GitHub から自分のインスタンスをデプロイできます',
 
     leftColLabel: '元の言語 / 対象言語',
     rightColLabel: '処理言語',
@@ -250,12 +258,14 @@ const texts: Record<string, UIText> = {
     translationMethodLLM: 'LLM 번역 (고품질 · 스트리밍 지원)',
     done: '완료',
 
-    apiConfig: 'API 설정',
+    modelButton: '모델',
+    apiConfig: '모델 설정',
     deepseekApiKey: 'DeepSeek API 키',
     openaiApiKey: 'OpenAI API 키',
     mainLlmProvider: '추론 모델',
     translationLlmProvider: '번역 모델',
-    providerAuto: '자동 (사용 가능한 키 사용)',
+    providerAuto: '자동',
+    moreModelsHint: 'OpenAI, Claude 등 더 많은 모델을 사용하고 싶다면 GitHub에서 직접 배포하세요',
 
     leftColLabel: '원본 / 대상',
     rightColLabel: '처리 언어',

@@ -194,9 +194,9 @@ const DualColumnView: React.FC<DualColumnViewProps> = ({ turns, settings, langua
                   SRC
                 </span>
                 <button
-                  onClick={() => setColumnFocus(rightHidden ? 'both' : 'right')}
-                  aria-label={rightHidden ? 'Expand right column' : 'Collapse left column'}
-                  title={rightHidden ? 'Expand right' : 'Collapse left'}
+                  onClick={() => setColumnFocus(rightHidden ? 'both' : 'left')}
+                  aria-label={rightHidden ? 'Restore both columns' : 'Expand left column'}
+                  title={rightHidden ? 'Restore both columns' : 'Expand left'}
                   className={`group ml-1.5 w-6 h-6 rounded-md flex items-center justify-center transition-all duration-200 cursor-pointer border ${
                     rightHidden
                       ? 'bg-violet-500/[0.14] hover:bg-violet-500/[0.25] border-violet-500/[0.25] hover:border-violet-500/[0.45]'
@@ -205,11 +205,11 @@ const DualColumnView: React.FC<DualColumnViewProps> = ({ turns, settings, langua
                 >
                   {rightHidden ? (
                     <svg className="w-3 h-3 text-violet-400/65 group-hover:text-violet-300 transition-colors duration-200" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M13 17l5-5-5-5M6 17l5-5-5-5"/>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M11 17l-5-5 5-5M18 17l-5-5 5-5"/>
                     </svg>
                   ) : (
                     <svg className="w-3 h-3 text-violet-400/30 group-hover:text-violet-300/75 transition-colors duration-200" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M11 17l-5-5 5-5M18 17l-5-5 5-5"/>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M13 17l5-5-5-5M6 17l5-5-5-5"/>
                     </svg>
                   )}
                 </button>
@@ -226,9 +226,9 @@ const DualColumnView: React.FC<DualColumnViewProps> = ({ turns, settings, langua
               <div className="absolute top-0 left-0 w-4/5 h-[2px] rounded-full bg-gradient-to-r from-cyan-500/55 to-transparent" />
 
               <button
-                onClick={() => setColumnFocus(leftHidden ? 'both' : 'left')}
-                aria-label={leftHidden ? 'Expand left column' : 'Collapse right column'}
-                title={leftHidden ? 'Expand left' : 'Collapse right'}
+                onClick={() => setColumnFocus(leftHidden ? 'both' : 'right')}
+                aria-label={leftHidden ? 'Restore both columns' : 'Expand right column'}
+                title={leftHidden ? 'Restore both columns' : 'Expand right'}
                 className={`flex-shrink-0 group w-6 h-6 rounded-md flex items-center justify-center transition-all duration-200 cursor-pointer border ${
                   leftHidden
                     ? 'bg-cyan-500/[0.12] hover:bg-cyan-500/[0.24] border-cyan-500/[0.22] hover:border-cyan-500/[0.42]'
@@ -237,11 +237,11 @@ const DualColumnView: React.FC<DualColumnViewProps> = ({ turns, settings, langua
               >
                 {leftHidden ? (
                   <svg className="w-3 h-3 text-cyan-400/65 group-hover:text-cyan-300 transition-colors duration-200" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M11 17l-5-5 5-5M18 17l-5-5 5-5"/>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M13 17l5-5-5-5M6 17l5-5-5-5"/>
                   </svg>
                 ) : (
                   <svg className="w-3 h-3 text-cyan-400/30 group-hover:text-cyan-300/75 transition-colors duration-200" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M13 17l5-5-5-5M6 17l5-5-5-5"/>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M11 17l-5-5 5-5M18 17l-5-5 5-5"/>
                   </svg>
                 )}
               </button>

@@ -342,9 +342,26 @@ class StreamingMessage(BaseModel):
 # REST API Endpoints
 @app.get("/api/config", dependencies=[Depends(_verify_auth_token)])
 async def get_app_config():
-    """Return feature flags for the frontend"""
+    """Return feature flags and available server-side providers for the frontend"""
+    allow_user_keys = os.getenv("ALLOW_USER_API_KEYS", "false").lower() == "true"
+
+    # Expose which providers have server-configured API keys
+    # (so the frontend can offer provider/model selection even without user keys)
+    available: list[str] = []
+    if orchestrator:
+        cfg = orchestrator.config
+        _provider_key_map = {
+            'deepseek': cfg.deepseek_api_key,
+            'openai':   cfg.openai_api_key,
+            'claude':   cfg.anthropic_api_key,
+            'gemini':   cfg.google_api_key,
+            'qwen':     cfg.qwen_api_key,
+        }
+        available = [p for p, k in _provider_key_map.items() if k]
+
     return {
-        "allow_user_api_keys": os.getenv("ALLOW_USER_API_KEYS", "false").lower() == "true"
+        "allow_user_api_keys": allow_user_keys,
+        "available_providers": available,
     }
 
 @app.get("/api/health")
@@ -422,16 +439,29 @@ class GenerateTitleRequest(BaseModel):
 
 def _resolve_llm_for_title(data: dict):
     """Resolve an LLM client for title generation, reusing _resolve_agents key logic."""
-    keys = {
+    user_keys = {
         'deepseek': (data.get('deepseek_api_key') or '').strip(),
         'openai':   (data.get('openai_api_key') or '').strip(),
         'claude':   (data.get('anthropic_api_key') or '').strip(),
         'gemini':   (data.get('google_api_key') or '').strip(),
         'qwen':     (data.get('qwen_api_key') or '').strip(),
     }
+    # Merge with server-configured keys (user keys take priority)
+    server_keys: Dict[str, str] = {}
+    if orchestrator:
+        cfg = orchestrator.config
+        server_keys = {
+            'deepseek': cfg.deepseek_api_key or '',
+            'openai':   cfg.openai_api_key or '',
+            'claude':   cfg.anthropic_api_key or '',
+            'gemini':   cfg.google_api_key or '',
+            'qwen':     cfg.qwen_api_key or '',
+        }
+    keys = {p: user_keys[p] or server_keys.get(p, '') for p in user_keys}
+
     prov = data.get('main_llm_provider', 'auto')
     if prov == 'auto':
-        for p in ('deepseek', 'openai', 'claude', 'gemini', 'qwen'):
+        for p in ('deepseek', 'qwen', 'openai', 'claude', 'gemini'):
             if keys[p]:
                 prov = p
                 break
@@ -789,19 +819,36 @@ def _resolve_agents(request_data: Dict[str, Any]):
     main_model  = (request_data.get('main_llm_model')          or '').strip()
     trans_model = (request_data.get('translation_llm_model')   or '').strip()
 
-    # Key lookup by provider — used when building per-request LLM instances
-    _key_map: Dict[str, str] = {
+    # Key lookup by provider — user-supplied keys first, fall back to server keys
+    _user_key_map: Dict[str, str] = {
         'deepseek': deepseek_key,
         'openai':   openai_key,
         'claude':   anthropic_key,
         'gemini':   google_key,
         'qwen':     qwen_key,
     }
+    # Merge with server-configured keys (user keys take priority)
+    _server_key_map: Dict[str, str] = {}
+    if orchestrator:
+        cfg = orchestrator.config
+        _server_key_map = {
+            'deepseek': cfg.deepseek_api_key or '',
+            'openai':   cfg.openai_api_key or '',
+            'claude':   cfg.anthropic_api_key or '',
+            'gemini':   cfg.google_api_key or '',
+            'qwen':     cfg.qwen_api_key or '',
+        }
+    _key_map: Dict[str, str] = {
+        p: _user_key_map[p] or _server_key_map.get(p, '')
+        for p in _user_key_map
+    }
+
+    # ── Auto-resolution priority (shared by both roles) ─────────────
+    _AUTO_PRIORITY = ('deepseek', 'qwen', 'openai', 'claude', 'gemini')
 
     # ── Resolve main (questioner) provider ─────────────────────────
-    # auto priority: deepseek → openai → claude → gemini → qwen
     if main_prov == 'auto':
-        for p in ('deepseek', 'openai', 'claude', 'gemini', 'qwen'):
+        for p in _AUTO_PRIORITY:
             if _key_map[p]:
                 main_prov = p
                 break
@@ -809,9 +856,8 @@ def _resolve_agents(request_data: Dict[str, Any]):
             main_prov = None
 
     # ── Resolve translation provider ───────────────────────────────
-    # auto priority: openai → deepseek → claude → gemini → qwen
     if trans_prov == 'auto':
-        for p in ('openai', 'deepseek', 'claude', 'gemini', 'qwen'):
+        for p in _AUTO_PRIORITY:
             if _key_map[p]:
                 trans_prov = p
                 break
