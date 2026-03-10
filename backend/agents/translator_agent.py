@@ -149,8 +149,9 @@ class TranslatorAgent:
         return (
             f"You are a professional translator. Translate the following {source_display} text to {target_display}. "
             "Rules:\n"
-            "1. Only return the translated text — no explanations or extra commentary.\n"
-            "2. Keep the meaning and tone as accurate as possible.\n"
+            "1. Output ONLY the translated text. Do NOT add any preamble, explanation, commentary, "
+            "summary, notes, or extra content that is not present in the original text.\n"
+            "2. Keep the meaning and tone as accurate as possible. Do NOT add, omit, or embellish any information.\n"
             "3. Preserve ALL code blocks exactly as-is. "
             "This includes fenced code blocks (content wrapped in triple backticks ``` ... ```) "
             "and inline code (content wrapped in single backticks ` ... `). "

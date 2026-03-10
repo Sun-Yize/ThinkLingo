@@ -398,8 +398,8 @@ const TranslationChat: React.FC = () => {
           qwen_base_url:      settings.qwenRegion === 'cn'
             ? 'https://dashscope.aliyuncs.com/compatible-mode/v1'
             : 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1',
-          main_llm_provider:  settings.mainLlm.provider,
-          main_llm_model:     settings.mainLlm.model,
+          translation_llm_provider:  settings.translationLlm.provider,
+          translation_llm_model:     settings.translationLlm.model,
         }),
       });
       const data = await res.json();

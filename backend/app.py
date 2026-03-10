@@ -454,12 +454,12 @@ class GenerateTitleRequest(BaseModel):
     google_api_key: Optional[str] = None
     qwen_api_key: Optional[str] = None
     qwen_base_url: Optional[str] = None
-    main_llm_provider: str = "auto"
-    main_llm_model: str = ""
+    translation_llm_provider: str = "auto"
+    translation_llm_model: str = ""
 
 
 def _resolve_llm_for_title(data: dict):
-    """Resolve an LLM client for title generation, reusing _resolve_agents key logic."""
+    """Resolve an LLM client for title generation using the translation LLM."""
     user_keys = {
         'deepseek': (data.get('deepseek_api_key') or '').strip(),
         'openai':   (data.get('openai_api_key') or '').strip(),
@@ -480,7 +480,7 @@ def _resolve_llm_for_title(data: dict):
         }
     keys = {p: user_keys[p] or server_keys.get(p, '') for p in user_keys}
 
-    prov = data.get('main_llm_provider', 'auto')
+    prov = data.get('translation_llm_provider', 'auto')
     if prov == 'auto':
         for p in ('deepseek', 'qwen', 'openai', 'claude', 'gemini'):
             if keys[p]:
@@ -489,7 +489,7 @@ def _resolve_llm_for_title(data: dict):
         else:
             prov = None
     if prov and keys.get(prov):
-        model = (data.get('main_llm_model') or '').strip() or _DEFAULT_MODELS.get(prov, '')
+        model = (data.get('translation_llm_model') or '').strip() or _DEFAULT_MODELS.get(prov, '')
         extra = {}
         if prov == 'qwen':
             base_url = _validate_qwen_base_url(data.get('qwen_base_url'))
@@ -497,7 +497,7 @@ def _resolve_llm_for_title(data: dict):
                 extra['base_url'] = base_url
         return LLMFactory.create_specific_llm(prov, keys[prov], model, **extra)
     if orchestrator:
-        return orchestrator.questioner.llm_client
+        return orchestrator.translator.llm_client
     return None
 
 
@@ -1109,6 +1109,7 @@ async def process_streaming_chat(
         # sees the natural phrasing.  The generated system prompt is written
         # in the processing language.
         routed_system_prompt: Optional[str] = None
+        prompt_translation_task: Optional[asyncio.Task] = None
         router = _resolve_router(request_data, translator)
         if router is not None:
             await _send(StreamingMessage(
@@ -1187,8 +1188,9 @@ async def process_streaming_chat(
                 metadata={"template_label": routing_label}
             ))
 
-            # Translate the system prompt to source language for the left column
-            if routed_system_prompt and source_language != processing_language:
+            # Translate the system prompt to source language for the left column.
+            # Launch as a background task so input translation can start in parallel.
+            async def _translate_routed_prompt() -> None:
                 try:
                     if translation_method == 'llm':
                         async for tok in _strip_think_tags(_stream_translation(
@@ -1228,8 +1230,11 @@ async def process_streaming_chat(
                         content="",
                         metadata={}
                     ))
+
+            if routed_system_prompt and source_language != processing_language:
+                prompt_translation_task = asyncio.create_task(_translate_routed_prompt())
             elif routed_system_prompt:
-                # Same language — mirror directly
+                # Same language — mirror directly (instant, no need for a task)
                 await _send(StreamingMessage(
                     type="prompt_routing_translation_chunk",
                     step="routing",
@@ -1300,6 +1305,11 @@ async def process_streaming_chat(
                 content=processed_input,
                 metadata={"original": message, "translated": processed_input, "skipped": True}
             ))
+
+        # Ensure system prompt translation finishes before inference starts
+        if prompt_translation_task is not None:
+            await prompt_translation_task
+            prompt_translation_task = None
 
         # Step 2 + 3: Streaming inference with concurrent paragraph-chunked translation
         await _send(StreamingMessage(

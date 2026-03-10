@@ -88,6 +88,15 @@ const TurnRow: React.FC<TurnRowProps> = ({ turn, sourceLanguage, processingLangu
   }, [isThinkingStreaming]);
   const toggleThinking = React.useCallback(() => setThinkingExpanded(prev => !prev), []);
 
+  // Shared expanded state for left & right refined prompt blocks
+  const hasRefinedPrompt = !!(turn.refinedPrompt || turn.leftRefinedPrompt);
+  const isPromptStreaming = turn.refinedPromptStatus === 'streaming' || turn.leftRefinedPromptStatus === 'streaming';
+  const [promptExpanded, setPromptExpanded] = useState(hasRefinedPrompt && isPromptStreaming);
+  React.useEffect(() => {
+    if (isPromptStreaming) setPromptExpanded(true);
+  }, [isPromptStreaming]);
+  const togglePrompt = React.useCallback(() => setPromptExpanded(prev => !prev), []);
+
   const leftHidden  = columnFocus === 'right';
   const rightHidden = columnFocus === 'left';
   const showDivider = columnFocus === 'both';
@@ -137,7 +146,16 @@ const TurnRow: React.FC<TurnRowProps> = ({ turn, sourceLanguage, processingLangu
                 className="rounded-xl border border-violet-500/15 overflow-hidden"
                 style={{ background: 'rgba(139,92,246,0.04)' }}
               >
-                <div className="flex items-center gap-1.5 px-3 py-1.5 border-b border-violet-500/10">
+                <button
+                  onClick={togglePrompt}
+                  className="w-full flex items-center gap-1.5 px-3 py-1.5 cursor-pointer hover:bg-violet-500/[0.04] transition-colors"
+                >
+                  <svg
+                    className={`w-3 h-3 text-violet-400/50 flex-shrink-0 transition-transform duration-200 ${promptExpanded ? 'rotate-90' : ''}`}
+                    viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7"/>
+                  </svg>
                   <svg className="w-3 h-3 text-violet-400/50 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.324.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.24-.438.613-.431.992a6.759 6.759 0 010 .255c-.007.378.138.75.43.99l1.005.828c.424.35.534.954.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.57 6.57 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.28c-.09.543-.56.941-1.11.941h-2.594c-.55 0-1.02-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.992a6.932 6.932 0 010-.255c.007-.378-.138-.75-.43-.99l-1.004-.828a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.087.22-.128.332-.183.582-.495.644-.869l.214-1.281z"/>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
@@ -156,13 +174,17 @@ const TurnRow: React.FC<TurnRowProps> = ({ turn, sourceLanguage, processingLangu
                       ))}
                     </span>
                   )}
-                </div>
-                <p className="px-3 py-2.5 text-[12px] leading-relaxed text-white/55 whitespace-pre-wrap">
-                  {turn.leftRefinedPrompt}
-                  {turn.leftRefinedPromptStatus === 'streaming' && (
-                    <span className="inline-block w-[2px] h-[13px] bg-violet-400/50 ml-[1px] align-middle animate-pulse" />
-                  )}
-                </p>
+                </button>
+                {promptExpanded && (
+                  <div className="px-3 py-2.5 border-t border-violet-500/10">
+                    <p className="text-[12px] leading-relaxed text-white/55 whitespace-pre-wrap">
+                      {turn.leftRefinedPrompt}
+                      {turn.leftRefinedPromptStatus === 'streaming' && (
+                        <span className="inline-block w-[2px] h-[13px] bg-violet-400/50 ml-[1px] align-middle animate-pulse" />
+                      )}
+                    </p>
+                  </div>
+                )}
               </div>
             )}
 
@@ -226,8 +248,16 @@ const TurnRow: React.FC<TurnRowProps> = ({ turn, sourceLanguage, processingLangu
                 className="rounded-xl border border-cyan-500/15 overflow-hidden"
                 style={{ background: 'rgba(6,182,212,0.04)' }}
               >
-                {/* Header */}
-                <div className="flex items-center gap-1.5 px-3 py-1.5 border-b border-cyan-500/10">
+                <button
+                  onClick={togglePrompt}
+                  className="w-full flex items-center gap-1.5 px-3 py-1.5 cursor-pointer hover:bg-cyan-500/[0.04] transition-colors"
+                >
+                  <svg
+                    className={`w-3 h-3 text-cyan-400/50 flex-shrink-0 transition-transform duration-200 ${promptExpanded ? 'rotate-90' : ''}`}
+                    viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7"/>
+                  </svg>
                   <svg className="w-3 h-3 text-cyan-400/50 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.324.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.24-.438.613-.431.992a6.759 6.759 0 010 .255c-.007.378.138.75.43.99l1.005.828c.424.35.534.954.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.57 6.57 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.28c-.09.543-.56.941-1.11.941h-2.594c-.55 0-1.02-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.992a6.932 6.932 0 010-.255c.007-.378-.138-.75-.43-.99l-1.004-.828a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.087.22-.128.332-.183.582-.495.644-.869l.214-1.281z"/>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
@@ -246,14 +276,17 @@ const TurnRow: React.FC<TurnRowProps> = ({ turn, sourceLanguage, processingLangu
                       ))}
                     </span>
                   )}
-                </div>
-                {/* Content */}
-                <p className="px-3 py-2.5 text-[12px] leading-relaxed text-white/55 whitespace-pre-wrap">
-                  {turn.refinedPrompt}
-                  {turn.refinedPromptStatus === 'streaming' && (
-                    <span className="inline-block w-[2px] h-[13px] bg-cyan-400/50 ml-[1px] align-middle animate-pulse" />
-                  )}
-                </p>
+                </button>
+                {promptExpanded && (
+                  <div className="px-3 py-2.5 border-t border-cyan-500/10">
+                    <p className="text-[12px] leading-relaxed text-white/55 whitespace-pre-wrap">
+                      {turn.refinedPrompt}
+                      {turn.refinedPromptStatus === 'streaming' && (
+                        <span className="inline-block w-[2px] h-[13px] bg-cyan-400/50 ml-[1px] align-middle animate-pulse" />
+                      )}
+                    </p>
+                  </div>
+                )}
               </div>
             )}
             <MessageBubble
