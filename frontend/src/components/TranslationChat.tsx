@@ -29,7 +29,6 @@ const _authHeaders = (): Record<string, string> => {
 const _getWsToken = (): string => _sessionToken || STATIC_AUTH_TOKEN;
 
 // Daily quota limit — set from /api/session response
-let _ip_quota_limit = 0;
 
 const MAX_CONVERSATIONS = 50;
 const STORAGE_INDEX_KEY = 'thinklingo_conv_index';
@@ -149,7 +148,6 @@ const TranslationChat: React.FC = () => {
   const [responseTypes, setResponseTypes] = useState<ResponseType[]>([]);
   const [allowUserApiKeys, setAllowUserApiKeys] = useState(false);
   const [availableProviders, setAvailableProviders] = useState<string[]>([]);
-  const [quotaRemaining, setQuotaRemaining] = useState<number | null>(null);
 
   // Conversation management
   const [convIndex, setConvIndex]   = useState<ConversationMeta[]>(loadConvIndex);
@@ -186,10 +184,6 @@ const TranslationChat: React.FC = () => {
         if (res.ok) {
           const data = await res.json();
           _sessionToken = data.session_token;
-          _ip_quota_limit = data.daily_quota ?? 0;
-          // -1 means unlimited — don't show quota indicator
-          const remaining = data.quota_remaining ?? null;
-          setQuotaRemaining(remaining === -1 ? null : remaining);
         }
       } catch {
         // Fall back to static AUTH_TOKEN if session endpoint unavailable
@@ -693,7 +687,6 @@ const TranslationChat: React.FC = () => {
 
       case 'error':
         if (msg.metadata?.quota_exceeded) {
-          setQuotaRemaining(0);
         }
         updateLastTurn(ctx, { status: 'error', error: msg.content, leftAiStatus: 'complete', rightAiStatus: 'complete' });
         finalizeStream(ctx);
@@ -774,8 +767,6 @@ const TranslationChat: React.FC = () => {
     setTurns(prev => [...prev, newTurn]);
     setIsProcessing(true);
     setScrollTrigger(n => n + 1);
-    setQuotaRemaining(prev => prev !== null ? Math.max(0, prev - 1) : prev);
-
     wsRef.current.send(JSON.stringify({
       message,
       source_language:          settings.sourceLanguage,
@@ -877,18 +868,6 @@ const TranslationChat: React.FC = () => {
 
         {/* Header buttons */}
         <div className="flex items-center gap-1.5 md:gap-2 flex-shrink-0">
-          {/* Quota indicator */}
-          {quotaRemaining !== null && (
-            <span className={`text-[10px] md:text-[11px] font-medium px-1.5 md:px-2 py-1 rounded-lg ${
-              quotaRemaining === 0
-                ? 'text-red-400/80 bg-red-500/[0.10]'
-                : quotaRemaining < 20
-                  ? 'text-amber-400/70 bg-amber-500/[0.08]'
-                  : 'text-white/30'
-            }`}>
-              {quotaRemaining}/{_ip_quota_limit}
-            </span>
-          )}
           {/* Model config button */}
           <button
               onClick={() => setApiConfigOpen(true)}

@@ -10,6 +10,8 @@ import json
 import time
 import hmac
 import secrets
+import sqlite3
+import tempfile
 import threading
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
@@ -76,66 +78,126 @@ def _validate_qwen_base_url(url: Optional[str]) -> Optional[str]:
     return None
 
 
-# --- Dynamic Session Management ---
+# --- Dynamic Session Management (SQLite-backed, safe across workers) ---
+_SESSION_DB_PATH = os.path.join(tempfile.gettempdir(), "thinklingo_sessions.db")
+
+
 class SessionManager:
-    """Manages short-lived session tokens bound to client IP."""
+    """Manages short-lived session tokens bound to client IP.
+
+    Uses SQLite for storage so that multiple uvicorn workers share the same
+    session state.  Each thread/worker opens its own connection (SQLite
+    serialises writes via its own locking, so no external lock is needed).
+    """
 
     def __init__(self, ttl_seconds: int = 3600, max_sessions_per_ip_per_hour: int = 10):
-        self._sessions: Dict[str, Dict[str, Any]] = {}  # token -> {ip, expires_at}
-        self._creation_log: Dict[str, list[float]] = defaultdict(list)  # ip -> [timestamps]
         self._ttl = ttl_seconds
         self._max_per_hour = max_sessions_per_ip_per_hour
-        self._lock = threading.Lock()
+        self._init_db()
+
+    # -- internal helpers --------------------------------------------------
+
+    def _conn(self) -> sqlite3.Connection:
+        conn = sqlite3.connect(_SESSION_DB_PATH, timeout=5)
+        conn.execute("PRAGMA journal_mode=WAL")
+        return conn
+
+    def _init_db(self):
+        with self._conn() as conn:
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS sessions (
+                    token      TEXT PRIMARY KEY,
+                    ip         TEXT NOT NULL,
+                    expires_at REAL NOT NULL
+                )
+            """)
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS creation_log (
+                    ip         TEXT NOT NULL,
+                    created_at REAL NOT NULL
+                )
+            """)
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_sessions_ip ON sessions(ip)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_clog_ip ON creation_log(ip)")
+
+    # -- public API --------------------------------------------------------
 
     def create_session(self, ip: str) -> Optional[str]:
         """Create a new session token for the given IP. Returns None if rate limited."""
         now = time.time()
-        with self._lock:
+        with self._conn() as conn:
             # Rate limit session creation per IP (0 = unlimited)
             if self._max_per_hour > 0:
-                self._creation_log[ip] = [t for t in self._creation_log[ip] if now - t < 3600]
-                if len(self._creation_log[ip]) >= self._max_per_hour:
+                conn.execute("DELETE FROM creation_log WHERE created_at < ?", (now - 3600,))
+                row = conn.execute(
+                    "SELECT COUNT(*) FROM creation_log WHERE ip = ?", (ip,)
+                ).fetchone()
+                if row and row[0] >= self._max_per_hour:
                     return None
             token = secrets.token_urlsafe(32)
-            self._sessions[token] = {"ip": ip, "expires_at": now + self._ttl}
-            self._creation_log[ip].append(now)
+            conn.execute(
+                "INSERT INTO sessions (token, ip, expires_at) VALUES (?, ?, ?)",
+                (token, ip, now + self._ttl),
+            )
+            conn.execute(
+                "INSERT INTO creation_log (ip, created_at) VALUES (?, ?)",
+                (ip, now),
+            )
         return token
 
     def validate_session(self, token: str, ip: str) -> bool:
         """Validate a session token. Must match IP and not be expired."""
         if not token:
             return False
-        with self._lock:
-            session = self._sessions.get(token)
-            if not session:
+        now = time.time()
+        with self._conn() as conn:
+            row = conn.execute(
+                "SELECT ip, expires_at FROM sessions WHERE token = ?", (token,)
+            ).fetchone()
+            if not row:
                 return False
-            if time.time() > session["expires_at"]:
-                del self._sessions[token]
+            if now > row[1]:
+                conn.execute("DELETE FROM sessions WHERE token = ?", (token,))
                 return False
-            return session["ip"] == ip
-        return False
+            return row[0] == ip
 
     def cleanup(self):
-        """Remove expired sessions."""
+        """Remove expired sessions and stale creation logs."""
         now = time.time()
-        with self._lock:
-            expired = [t for t, s in self._sessions.items() if now > s["expires_at"]]
-            for t in expired:
-                del self._sessions[t]
-            # Also clean up old creation logs
-            empty_ips = [ip for ip, ts in self._creation_log.items() if not ts or now - ts[-1] > 3600]
-            for ip in empty_ips:
-                del self._creation_log[ip]
+        with self._conn() as conn:
+            conn.execute("DELETE FROM sessions WHERE expires_at < ?", (now,))
+            conn.execute("DELETE FROM creation_log WHERE created_at < ?", (now - 3600,))
 
 
-# --- Per-IP Daily Message Quota ---
+# --- Per-IP Daily Message Quota (SQLite-backed, safe across workers) ---
+_QUOTA_DB_PATH = os.path.join(tempfile.gettempdir(), "thinklingo_quota.db")
+
+
 class IPQuotaManager:
-    """Tracks per-IP daily message counts and enforces quotas."""
+    """Tracks per-IP daily message counts and enforces quotas.
+
+    Uses SQLite so counters are shared across uvicorn workers.
+    """
 
     def __init__(self, daily_limit: int = 200):
         self._daily_limit = daily_limit
-        self._counters: Dict[str, Dict[str, int]] = {}  # ip -> {date_str: count}
-        self._lock = threading.Lock()
+        self._init_db()
+
+    def _conn(self) -> sqlite3.Connection:
+        conn = sqlite3.connect(_QUOTA_DB_PATH, timeout=5)
+        conn.execute("PRAGMA journal_mode=WAL")
+        return conn
+
+    def _init_db(self):
+        with self._conn() as conn:
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS quota (
+                    ip         TEXT NOT NULL,
+                    day        TEXT NOT NULL,
+                    count      INTEGER NOT NULL DEFAULT 0,
+                    PRIMARY KEY (ip, day)
+                )
+            """)
 
     @property
     def daily_limit(self) -> int:
@@ -150,19 +212,18 @@ class IPQuotaManager:
         if self._daily_limit <= 0:
             return True, -1  # unlimited
         today = date.today().isoformat()
-        with self._lock:
-            if ip not in self._counters:
-                self._counters[ip] = {}
-            ip_data = self._counters[ip]
-            # Reset if it's a new day (clean up old dates)
-            old_dates = [d for d in ip_data if d != today]
-            for d in old_dates:
-                del ip_data[d]
-
-            current = ip_data.get(today, 0)
+        with self._conn() as conn:
+            row = conn.execute(
+                "SELECT count FROM quota WHERE ip = ? AND day = ?", (ip, today)
+            ).fetchone()
+            current = row[0] if row else 0
             if current >= self._daily_limit:
                 return False, 0
-            ip_data[today] = current + 1
+            conn.execute(
+                "INSERT INTO quota (ip, day, count) VALUES (?, ?, 1) "
+                "ON CONFLICT(ip, day) DO UPDATE SET count = count + 1",
+                (ip, today),
+            )
             return True, self._daily_limit - current - 1
 
     def get_remaining(self, ip: str) -> int:
@@ -170,18 +231,18 @@ class IPQuotaManager:
         if self._daily_limit <= 0:
             return -1
         today = date.today().isoformat()
-        with self._lock:
-            current = self._counters.get(ip, {}).get(today, 0)
+        with self._conn() as conn:
+            row = conn.execute(
+                "SELECT count FROM quota WHERE ip = ? AND day = ?", (ip, today)
+            ).fetchone()
+            current = row[0] if row else 0
             return max(0, self._daily_limit - current)
 
     def cleanup(self):
         """Remove stale entries from past days."""
         today = date.today().isoformat()
-        with self._lock:
-            for ip in list(self._counters.keys()):
-                self._counters[ip] = {d: c for d, c in self._counters[ip].items() if d == today}
-                if not self._counters[ip]:
-                    del self._counters[ip]
+        with self._conn() as conn:
+            conn.execute("DELETE FROM quota WHERE day < ?", (today,))
 
 
 _session_manager = SessionManager(
