@@ -141,7 +141,9 @@ const TranslationChat: React.FC = () => {
   const [scrollTrigger, setScrollTrigger] = useState(0);
   const [settingsOpen, setSettingsOpen]     = useState(false);
   const [apiConfigOpen, setApiConfigOpen]   = useState(false);
-  const [historyOpen, setHistoryOpen]       = useState(true);
+  const [historyOpen, setHistoryOpen]       = useState(() =>
+    typeof window !== 'undefined' ? window.innerWidth >= 768 : true
+  );
   const [settings, setSettings]         = useState<ChatSettings>(loadSettings);
   const [languages, setLanguages]       = useState<Language[]>([]);
   const [responseTypes, setResponseTypes] = useState<ResponseType[]>([]);
@@ -810,13 +812,13 @@ const TranslationChat: React.FC = () => {
       {/* ── Main content column ──────────────────────────────────── */}
       <div className="flex-1 flex flex-col overflow-hidden min-w-0">
       {/* ── Fixed header ──────────────────────────────────────────── */}
-      <header className="relative flex-shrink-0 flex items-center justify-between px-3 md:px-6 h-[50px] md:h-[58px] bg-[rgba(11,11,20,0.82)] backdrop-blur-xl">
-        <div className="flex items-center gap-3">
+      <header className="relative flex-shrink-0 flex items-center justify-between px-2 md:px-6 h-[46px] md:h-[58px] bg-[rgba(11,11,20,0.82)] backdrop-blur-xl">
+        <div className="flex items-center gap-2 md:gap-3 min-w-0">
           {/* History toggle button */}
           <button
             onClick={() => setHistoryOpen(prev => !prev)}
             aria-label={t.chatHistory}
-            className={`flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-lg transition-all duration-200 cursor-pointer ${
+            className={`flex-shrink-0 w-9 h-9 md:w-8 md:h-8 flex items-center justify-center rounded-lg transition-all duration-200 cursor-pointer ${
               historyOpen ? 'text-violet-400/70 bg-violet-500/[0.10]' : 'text-white/35 hover:text-white/75 hover:bg-white/[0.06]'
             }`}
           >
@@ -825,36 +827,44 @@ const TranslationChat: React.FC = () => {
             </svg>
           </button>
 
-          {/* Logo mark with glow halo */}
-          <div className="relative flex-shrink-0 w-8 h-8">
-            <div className="absolute inset-0 rounded-[10px] bg-gradient-to-br from-violet-500 to-cyan-500 blur-[7px] opacity-55" />
-            <div className="relative w-8 h-8 rounded-[10px] bg-gradient-to-br from-violet-500 to-cyan-500 flex items-center justify-center">
-              <svg className="w-4 h-4 text-white drop-shadow" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 8.25h9m-9 3H12m-9.75 1.51c0 1.6 1.123 2.994 2.707 3.227 1.129.166 2.27.293 3.423.379.35.026.67.21.865.501L12 21l2.755-4.133a1.14 1.14 0 01.865-.501 48.172 48.172 0 003.423-.379c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0012 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018z"/>
-              </svg>
+          {/* Logo mark + title — links to GitHub */}
+          <a
+            href="https://github.com/Sun-Yize/Ask-LLM-in-Multi-Lang"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-2 md:gap-3 min-w-0 no-underline"
+          >
+            {/* Logo mark with glow halo */}
+            <div className="relative flex-shrink-0 w-7 h-7 md:w-8 md:h-8">
+              <div className="absolute inset-0 rounded-[10px] bg-gradient-to-br from-violet-500 to-cyan-500 blur-[7px] opacity-55" />
+              <div className="relative w-7 h-7 md:w-8 md:h-8 rounded-[10px] bg-gradient-to-br from-violet-500 to-cyan-500 flex items-center justify-center">
+                <svg className="w-3.5 h-3.5 md:w-4 md:h-4 text-white drop-shadow" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 8.25h9m-9 3H12m-9.75 1.51c0 1.6 1.123 2.994 2.707 3.227 1.129.166 2.27.293 3.423.379.35.026.67.21.865.501L12 21l2.755-4.133a1.14 1.14 0 01.865-.501 48.172 48.172 0 003.423-.379c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0012 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018z"/>
+                </svg>
+              </div>
             </div>
-          </div>
-          {/* Gradient title + subtitle */}
-          <div className="flex flex-col gap-[1px]">
-            <span
-              className="text-[18px] font-bold tracking-[-0.3px] leading-tight"
-              style={{ background: 'linear-gradient(90deg, #c4b5fd 0%, #f0f0ff 50%, #67e8f9 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}
-            >
-              {t.appTitle}
-            </span>
-            <span className="hidden md:inline text-[11px] text-white/50 tracking-[0.1px] leading-relaxed">
-              {t.appTagline
-                .replace('{source}', t.languageNames[settings.sourceLanguage] ?? settings.sourceLanguage)
-                .replace('{processing}', t.languageNames[settings.processingLanguage] ?? settings.processingLanguage)}
-            </span>
-          </div>
+            {/* Gradient title + subtitle */}
+            <div className="flex flex-col gap-[1px] min-w-0">
+              <span
+                className="text-[15px] md:text-[18px] font-bold tracking-[-0.3px] leading-tight truncate"
+                style={{ background: 'linear-gradient(90deg, #c4b5fd 0%, #f0f0ff 50%, #67e8f9 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}
+              >
+                {t.appTitle}
+              </span>
+              <span className="hidden md:inline text-[11px] text-white/50 tracking-[0.1px] leading-relaxed">
+                {t.appTagline
+                  .replace('{source}', t.languageNames[settings.sourceLanguage] ?? settings.sourceLanguage)
+                  .replace('{processing}', t.languageNames[settings.processingLanguage] ?? settings.processingLanguage)}
+              </span>
+            </div>
+          </a>
         </div>
 
         {/* Header buttons */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5 md:gap-2 flex-shrink-0">
           {/* Quota indicator */}
           {quotaRemaining !== null && (
-            <span className={`text-[11px] font-medium px-2 py-1 rounded-lg ${
+            <span className={`text-[10px] md:text-[11px] font-medium px-1.5 md:px-2 py-1 rounded-lg ${
               quotaRemaining === 0
                 ? 'text-red-400/80 bg-red-500/[0.10]'
                 : quotaRemaining < 20
@@ -868,9 +878,9 @@ const TranslationChat: React.FC = () => {
           <button
               onClick={() => setApiConfigOpen(true)}
               aria-label="Open model configuration"
-              className="flex items-center gap-2 px-3.5 py-2 text-[12.5px] font-semibold text-white/45 hover:text-white/85 bg-white/[0.04] hover:bg-white/[0.08] rounded-xl border border-white/[0.08] hover:border-white/[0.15] transition-all duration-200 cursor-pointer"
+              className="flex items-center gap-2 px-2.5 py-2 md:px-3.5 text-[12.5px] font-semibold text-white/45 hover:text-white/85 bg-white/[0.04] hover:bg-white/[0.08] rounded-xl border border-white/[0.08] hover:border-white/[0.15] transition-all duration-200 cursor-pointer"
             >
-              <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7">
+              <svg className="w-4 h-4 md:w-3.5 md:h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.455 2.456L21.75 6l-1.036.259a3.375 3.375 0 00-2.455 2.456zM16.894 20.567L16.5 21.75l-.394-1.183a2.25 2.25 0 00-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 001.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 001.423 1.423l1.183.394-1.183.394a2.25 2.25 0 00-1.423 1.423z"/>
               </svg>
               <span className="hidden md:inline tracking-[0.15px]">{t.modelButton}</span>
@@ -880,9 +890,9 @@ const TranslationChat: React.FC = () => {
           <button
             onClick={() => setSettingsOpen(true)}
             aria-label="Open settings"
-            className="group flex items-center gap-2 px-3.5 py-2 text-[12.5px] font-semibold text-white/45 hover:text-white/85 bg-white/[0.04] hover:bg-white/[0.08] rounded-xl border border-white/[0.08] hover:border-white/[0.15] transition-all duration-200 cursor-pointer"
+            className="group flex items-center gap-2 px-2.5 py-2 md:px-3.5 text-[12.5px] font-semibold text-white/45 hover:text-white/85 bg-white/[0.04] hover:bg-white/[0.08] rounded-xl border border-white/[0.08] hover:border-white/[0.15] transition-all duration-200 cursor-pointer"
           >
-            <svg className="w-3.5 h-3.5 transition-transform duration-300 group-hover:rotate-[55deg]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7">
+            <svg className="w-4 h-4 md:w-3.5 md:h-3.5 transition-transform duration-300 group-hover:rotate-[55deg]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7">
               <path strokeLinecap="round" strokeLinejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.324.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.24-.438.613-.431.992a6.759 6.759 0 010 .255c-.007.378.138.75.43.99l1.005.828c.424.35.534.954.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.57 6.57 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.28c-.09.543-.56.941-1.11.941h-2.594c-.55 0-1.02-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.992a6.932 6.932 0 010-.255c.007-.378-.138-.75-.43-.99l-1.004-.828a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.087.22-.128.332-.183.582-.495.644-.869l.214-1.281z"/>
               <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
             </svg>

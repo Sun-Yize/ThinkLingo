@@ -114,8 +114,8 @@ const ChatHistory: React.FC<ChatHistoryProps> = ({
       }}
     >
       {/* Header */}
-      <div className="flex items-center justify-between px-4 h-[58px] flex-shrink-0 border-b border-white/[0.06]">
-        <span className="text-[14px] font-semibold text-white/70">{t.chatHistory}</span>
+      <div className="flex items-center justify-between px-4 h-[46px] md:h-[58px] flex-shrink-0 border-b border-white/[0.06]">
+        <span className="text-[13px] md:text-[14px] font-semibold text-white/70">{t.chatHistory}</span>
         <button
           onClick={onClose}
           className="w-7 h-7 flex items-center justify-center rounded-full text-white/30 hover:text-white/70 hover:bg-white/[0.07] transition-colors cursor-pointer"

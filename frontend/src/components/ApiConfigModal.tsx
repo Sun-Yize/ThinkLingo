@@ -70,6 +70,15 @@ const PROVIDER_MODELS: Record<string, string[]> = {
   qwen:     ['qwen-plus', 'qwen3-max', 'qwen3-max-thinking', 'qwen-turbo'],
 };
 
+// Translation LLM — lighter/cheaper models only
+const TRANSLATION_PROVIDER_MODELS: Record<string, string[]> = {
+  deepseek: ['deepseek-chat'],
+  openai:   ['gpt-4o-mini', 'gpt-4o', 'gpt-3.5-turbo'],
+  claude:   ['claude-opus-4-6', 'claude-sonnet-4-5', 'claude-haiku-4-5'],
+  gemini:   ['gemini-3.1-pro-preview', 'gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-2.5-flash-lite'],
+  qwen:     ['qwen-plus'],
+};
+
 // API key rows (field name in apiKeys, display label, placeholder)
 const API_KEY_ROWS: Array<{ field: keyof ChatSettings['apiKeys']; label: string; placeholder: string }> = [
   { field: 'deepseek',  label: 'DeepSeek', placeholder: 'sk-...' },
@@ -145,7 +154,8 @@ const ApiConfigModal: React.FC<ApiConfigModalProps> = ({
     role: 'mainLlm' | 'translationLlm',
     newProvider: string,
   ) => {
-    const model = newProvider === 'auto' ? '' : (PROVIDER_MODELS[newProvider]?.[0] ?? '');
+    const map = role === 'translationLlm' ? TRANSLATION_PROVIDER_MODELS : PROVIDER_MODELS;
+    const model = newProvider === 'auto' ? '' : (map[newProvider]?.[0] ?? '');
     onSettingsChange({ ...settings, [role]: { provider: newProvider, model } });
   };
 
@@ -153,13 +163,15 @@ const ApiConfigModal: React.FC<ApiConfigModalProps> = ({
     onSettingsChange({ ...settings, [role]: { ...settings[role], model } });
 
   // Build model dropdown options for each role
-  const modelOptions = (provider: string): SelectOption[] =>
-    (PROVIDER_MODELS[provider] ?? []).map(m => ({ value: m, label: m }));
+  const modelOptions = (provider: string, role: 'mainLlm' | 'translationLlm' = 'mainLlm'): SelectOption[] => {
+    const map = role === 'translationLlm' ? TRANSLATION_PROVIDER_MODELS : PROVIDER_MODELS;
+    return (map[provider] ?? []).map(m => ({ value: m, label: m }));
+  };
 
   const resolveModelValue = (role: 'mainLlm' | 'translationLlm'): SelectOption | null => {
     const { provider, model } = settings[role];
     if (provider === 'auto') return null;
-    const opts = modelOptions(provider);
+    const opts = modelOptions(provider, role);
     return opts.find(o => o.value === model) ?? opts[0] ?? null;
   };
 
@@ -188,7 +200,7 @@ const ApiConfigModal: React.FC<ApiConfigModalProps> = ({
             styles={selectDarkStyles}
             value={resolveModelValue(role)}
             onChange={opt => opt && handleModelChange(role, opt.value)}
-            options={modelOptions(provider)}
+            options={modelOptions(provider, role)}
             isDisabled={isAuto}
             placeholder={isAuto ? 'Default' : '—'}
             menuPortalTarget={document.body}
@@ -285,7 +297,7 @@ const ApiConfigModal: React.FC<ApiConfigModalProps> = ({
                     styles={selectDarkStyles}
                     value={resolveModelValue('translationLlm')}
                     onChange={opt => opt && handleModelChange('translationLlm', opt.value)}
-                    options={modelOptions(settings.translationLlm.provider)}
+                    options={modelOptions(settings.translationLlm.provider, 'translationLlm')}
                     isDisabled={settings.translationLlm.provider === 'auto'}
                     placeholder={settings.translationLlm.provider === 'auto' ? 'Default' : '—'}
                     menuPortalTarget={document.body}

@@ -70,7 +70,7 @@ const InputBar: React.FC<InputBarProps> = ({ onSend, disabled, sourceLanguage, s
   const canSend = !disabled && message.trim().length > 0;
 
   return (
-    <div className="relative flex-shrink-0 bg-[rgba(10,10,18,0.88)] backdrop-blur-xl px-3 py-3 md:px-5 md:py-4 flex flex-col items-center" style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}>
+    <div className="relative flex-shrink-0 bg-[rgba(10,10,18,0.88)] backdrop-blur-xl px-2.5 py-2 md:px-5 md:py-4 flex flex-col items-center" style={{ paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom))' }}>
 
       {/* Top separator — dual-tone, matches header/column-header system */}
       <div
@@ -98,7 +98,7 @@ const InputBar: React.FC<InputBarProps> = ({ onSend, disabled, sourceLanguage, s
         }}
       >
         {/* Inner surface */}
-        <div className="flex items-end gap-3 rounded-[23px] bg-[#0D0D1C] px-5 py-3.5">
+        <div className="flex items-end gap-2 md:gap-3 rounded-[23px] bg-[#0D0D1C] px-3 py-2.5 md:px-5 md:py-3.5">
           <textarea
             ref={textareaRef}
             value={message}
@@ -116,7 +116,7 @@ const InputBar: React.FC<InputBarProps> = ({ onSend, disabled, sourceLanguage, s
             placeholder={t.inputPlaceholder}
             disabled={disabled}
             rows={1}
-            className="flex-1 bg-transparent resize-none outline-none text-[15px] text-white/88 placeholder-white/22 py-[3px] max-h-[160px] leading-[1.6] disabled:cursor-not-allowed rounded-[8px]"
+            className="flex-1 bg-transparent resize-none outline-none text-[14px] md:text-[15px] text-white/88 placeholder-white/22 py-[3px] max-h-[160px] leading-[1.6] disabled:cursor-not-allowed rounded-[8px]"
             style={{ fontWeight: 450 }}
           />
 

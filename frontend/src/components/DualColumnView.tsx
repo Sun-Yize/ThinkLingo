@@ -129,31 +129,31 @@ const DualColumnView: React.FC<DualColumnViewProps> = ({ turns, settings, langua
           <div className="flex">
             <button
               onClick={() => setColumnFocus('left')}
-              className={`flex-1 flex items-center justify-center gap-2 py-3 text-[13px] font-semibold transition-colors duration-200 ${
+              className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-[12px] font-semibold transition-colors duration-200 ${
                 columnFocus === 'left'
                   ? 'text-violet-300 border-b-2 border-violet-500'
                   : 'text-white/35 border-b-2 border-transparent'
               }`}
             >
-              <span className="w-6 h-6 rounded-lg bg-violet-500/[0.10] border border-violet-500/[0.18] flex items-center justify-center">
-                <span className="text-[9px] font-bold font-mono text-violet-300 tracking-widest">{codeOf(leftLang)}</span>
+              <span className="w-5 h-5 rounded-md bg-violet-500/[0.10] border border-violet-500/[0.18] flex items-center justify-center">
+                <span className="text-[8px] font-bold font-mono text-violet-300 tracking-widest">{codeOf(leftLang)}</span>
               </span>
               <span className="truncate">{getLanguageName(leftLang)}</span>
-              <span className="text-[9px] font-mono text-violet-400/50 tracking-wider">SRC</span>
+              <span className="text-[8px] font-mono text-violet-400/50 tracking-wider">SRC</span>
             </button>
             <button
               onClick={() => setColumnFocus('right')}
-              className={`flex-1 flex items-center justify-center gap-2 py-3 text-[13px] font-semibold transition-colors duration-200 ${
+              className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-[12px] font-semibold transition-colors duration-200 ${
                 columnFocus === 'right'
                   ? 'text-cyan-300 border-b-2 border-cyan-500'
                   : 'text-white/35 border-b-2 border-transparent'
               }`}
             >
-              <span className="w-6 h-6 rounded-lg bg-cyan-500/[0.08] border border-cyan-500/[0.14] flex items-center justify-center">
-                <span className="text-[9px] font-bold font-mono text-cyan-300 tracking-widest">{codeOf(rightLang)}</span>
+              <span className="w-5 h-5 rounded-md bg-cyan-500/[0.08] border border-cyan-500/[0.14] flex items-center justify-center">
+                <span className="text-[8px] font-bold font-mono text-cyan-300 tracking-widest">{codeOf(rightLang)}</span>
               </span>
               <span className="truncate">{getLanguageName(rightLang)}</span>
-              <span className="text-[9px] font-mono text-cyan-400/45 tracking-wider">PROC</span>
+              <span className="text-[8px] font-mono text-cyan-400/45 tracking-wider">PROC</span>
             </button>
           </div>
         </div>
