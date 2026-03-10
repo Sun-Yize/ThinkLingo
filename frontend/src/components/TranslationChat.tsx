@@ -704,9 +704,24 @@ const TranslationChat: React.FC = () => {
     }
   };
 
+  // Check if any API key is available (server-side or user-provided)
+  const hasAnyApiKey = useCallback(() => {
+    // Server has pre-configured providers
+    if (availableProviders.length > 0) return true;
+    // User has provided at least one key
+    const keys = settings.apiKeys;
+    return !!(keys.deepseek || keys.openai || keys.anthropic || keys.google || keys.qwen);
+  }, [availableProviders, settings.apiKeys]);
+
   const handleSend = (message: string) => {
     if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
       connectWebSocket();
+      return;
+    }
+
+    // Prompt user to configure API keys if none are available
+    if (!hasAnyApiKey()) {
+      setApiConfigOpen(true);
       return;
     }
 
@@ -913,7 +928,7 @@ const TranslationChat: React.FC = () => {
       </div>
 
       {/* ── Input bar ─────────────────────────────────────────────── */}
-      <InputBar onSend={handleSend} disabled={isProcessing} sourceLanguage={settings.sourceLanguage} sidebarOpen={historyOpen} />
+      <InputBar onSend={handleSend} disabled={isProcessing} sourceLanguage={settings.sourceLanguage} sidebarOpen={historyOpen} noApiKey={!hasAnyApiKey()} onApiKeyClick={() => setApiConfigOpen(true)} />
       </div>{/* end main content column */}
 
       {/* ── Settings modal ────────────────────────────────────────── */}

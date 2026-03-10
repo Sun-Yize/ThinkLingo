@@ -55,12 +55,17 @@ class ClaudeLLM(BaseLLM):
 
         if self._is_oauth:
             # OAuth token → Authorization: Bearer <token>
-            # Also add the required beta header for OAuth authentication
+            # Also add the required beta header for OAuth authentication.
+            # Explicitly clear api_key to prevent the SDK from picking up
+            # ANTHROPIC_API_KEY from the environment (e.g. a placeholder
+            # loaded by dotenv), which would add an invalid X-Api-Key header
+            # alongside the correct Bearer auth and cause a 401.
             self.client = anthropic.Anthropic(
                 auth_token=api_key,
                 default_headers={"anthropic-beta": "oauth-2025-04-20"},
                 timeout=60.0,
             )
+            self.client.api_key = None
         else:
             # Regular API key → x-api-key: <key>
             self.client = anthropic.Anthropic(api_key=api_key, timeout=60.0)

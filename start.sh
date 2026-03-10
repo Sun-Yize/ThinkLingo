@@ -35,16 +35,16 @@ trap cleanup INT TERM
 # ── 1. Check .env ────────────────────────────────────────────────────────────
 
 if [ ! -f ".env" ]; then
-    red "Error: .env not found."
-    info "Run: cp .env.template .env  then add your API keys"
-    exit 1
+    if [ -f ".env.template" ]; then
+        cp .env.template .env
+        info "Created .env from .env.template"
+    else
+        info "No .env found — starting with defaults (configure API keys in the UI)"
+    fi
 fi
 
 if grep -q "your_deepseek_api_key\|your_openai_api_key" .env 2>/dev/null; then
-    red "Warning: .env still contains placeholder API keys."
-    info "Open .env and set DEEPSEEK_API_KEY and/or OPENAI_API_KEY before continuing."
-    read -rp "  Continue anyway? [y/N] " ans
-    [[ "$ans" =~ ^[Yy]$ ]] || exit 1
+    info "No API keys configured yet — you can set them in the UI (API Config) or by editing .env"
 fi
 
 # ── 2. Python dependencies ───────────────────────────────────────────────────

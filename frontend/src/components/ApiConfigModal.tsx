@@ -12,7 +12,7 @@ interface ApiConfigModalProps {
   availableProviders?: string[];
 }
 
-type SelectOption = { value: string; label: string };
+type SelectOption = { value: string; label: string; isDisabled?: boolean };
 
 const selectDarkStyles: StylesConfig<SelectOption, false> = {
   control: (base, state) => ({
@@ -40,12 +40,14 @@ const selectDarkStyles: StylesConfig<SelectOption, false> = {
     ...base,
     backgroundColor: state.isSelected
       ? 'rgba(124,58,237,0.28)'
-      : state.isFocused ? 'rgba(255,255,255,0.06)' : 'transparent',
-    color: state.isSelected ? '#c4b5fd' : 'rgba(255,255,255,0.78)',
+      : state.isFocused && !state.isDisabled ? 'rgba(255,255,255,0.06)' : 'transparent',
+    color: state.isDisabled
+      ? 'rgba(255,255,255,0.20)'
+      : state.isSelected ? '#c4b5fd' : 'rgba(255,255,255,0.78)',
     fontSize: '13px',
     padding: '7px 10px',
     borderRadius: '7px',
-    cursor: 'pointer',
+    cursor: state.isDisabled ? 'not-allowed' : 'pointer',
     transition: 'background-color 0.1s',
   }),
   singleValue: (base) => ({ ...base, color: 'rgba(255,255,255,0.85)', fontSize: '13px' }),
@@ -115,14 +117,25 @@ const ApiConfigModal: React.FC<ApiConfigModalProps> = ({
 
   const t = getT(settings.sourceLanguage);
 
-  // All provider entries
+  // Map provider → whether a usable key exists (server-configured or user-provided)
+  const _userKeyMap: Record<string, string> = {
+    deepseek: settings.apiKeys.deepseek ?? '',
+    openai:   settings.apiKeys.openai ?? '',
+    claude:   settings.apiKeys.anthropic ?? '',
+    gemini:   settings.apiKeys.google ?? '',
+    qwen:     settings.apiKeys.qwen ?? '',
+  };
+  const providerHasKey = (p: string) =>
+    availableProviders.includes(p) || !!_userKeyMap[p];
+
+  // All provider entries — disabled when no key is available
   const ALL_PROVIDERS: SelectOption[] = [
     { value: 'deepseek', label: 'DeepSeek' },
     { value: 'openai',   label: 'OpenAI' },
     { value: 'claude',   label: 'Claude' },
     { value: 'gemini',   label: 'Gemini' },
     { value: 'qwen',     label: 'Qwen' },
-  ];
+  ].map(o => ({ ...o, isDisabled: !providerHasKey(o.value) }));
 
   // When user keys are disallowed, only show server-configured providers
   const filteredProviders = allowUserApiKeys

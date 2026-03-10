@@ -6,6 +6,8 @@ interface InputBarProps {
   disabled: boolean;
   sourceLanguage: string;
   sidebarOpen?: boolean;
+  noApiKey?: boolean;
+  onApiKeyClick?: () => void;
 }
 
 // Wrap "Shift+Enter" and "Enter" as styled <kbd> chips; keep surrounding text as-is.
@@ -35,7 +37,7 @@ const renderHint = (hint: string) => {
   });
 };
 
-const InputBar: React.FC<InputBarProps> = ({ onSend, disabled, sourceLanguage, sidebarOpen = false }) => {
+const InputBar: React.FC<InputBarProps> = ({ onSend, disabled, sourceLanguage, sidebarOpen = false, noApiKey = false, onApiKeyClick }) => {
   const [message,   setMessage]   = useState('');
   const [isFocused, setIsFocused] = useState(false);
   const textareaRef  = useRef<HTMLTextAreaElement>(null);
@@ -145,10 +147,22 @@ const InputBar: React.FC<InputBarProps> = ({ onSend, disabled, sourceLanguage, s
         </div>
       </div>
 
-      {/* Keyboard shortcut hint with <kbd> chips — hidden on mobile */}
-      <div className="hidden md:flex items-center justify-center gap-1.5 mt-2.5 flex-wrap">
-        {renderHint(t.inputHint)}
-      </div>
+      {/* API key prompt or keyboard shortcut hint */}
+      {noApiKey ? (
+        <button
+          onClick={onApiKeyClick}
+          className="flex items-center justify-center gap-1.5 mt-2 md:mt-2.5 text-[11px] md:text-[12px] text-amber-400/70 hover:text-amber-300 transition-colors cursor-pointer"
+        >
+          <svg className="w-3.5 h-3.5 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 5.25a3 3 0 013 3m3 0a6 6 0 01-7.029 5.912c-.563-.097-1.159.026-1.563.43L10.5 17.25H8.25v2.25H6v2.25H2.25v-2.818c0-.597.237-1.17.659-1.591l6.499-6.499c.404-.404.527-1 .43-1.563A6 6 0 1121.75 8.25z"/>
+          </svg>
+          <span>{t.noApiKeyPrompt}</span>
+        </button>
+      ) : (
+        <div className="hidden md:flex items-center justify-center gap-1.5 mt-2.5 flex-wrap">
+          {renderHint(t.inputHint)}
+        </div>
+      )}
     </div>
   );
 };

@@ -60,6 +60,9 @@ export interface UIText {
   older: string;
   untitledChat: string;
 
+  // No API key prompt
+  noApiKeyPrompt: string;
+
   // Response type labels (key → localized label)
   responseTypeLabels: Record<string, string>;
 }
@@ -118,6 +121,8 @@ const texts: Record<string, UIText> = {
     yesterday: 'Yesterday',
     older: 'Older',
     untitledChat: 'Untitled Chat',
+
+    noApiKeyPrompt: 'No API key configured. Please add your API key to start chatting.',
 
     responseTypeLabels: {
       general:     'General — everyday queries',
@@ -182,6 +187,8 @@ const texts: Record<string, UIText> = {
     older: '更早',
     untitledChat: '未命名对话',
 
+    noApiKeyPrompt: '尚未配置 API Key，请先添加你的 API Key 以开始对话。',
+
     responseTypeLabels: {
       general:     '通用 — 日常对话',
       creative:    '创意 — 创意性回答',
@@ -245,6 +252,8 @@ const texts: Record<string, UIText> = {
     older: 'それ以前',
     untitledChat: '無題のチャット',
 
+    noApiKeyPrompt: 'API キーが設定されていません。チャットを開始するには API キーを追加してください。',
+
     responseTypeLabels: {
       general:     '一般 — 日常的な質問',
       creative:    'クリエイティブ — 創造的な回答',
@@ -307,6 +316,8 @@ const texts: Record<string, UIText> = {
     yesterday: '어제',
     older: '이전',
     untitledChat: '제목 없는 대화',
+
+    noApiKeyPrompt: 'API 키가 설정되지 않았습니다. 대화를 시작하려면 API 키를 추가해 주세요.',
 
     responseTypeLabels: {
       general:     '일반 — 일상적인 질문',

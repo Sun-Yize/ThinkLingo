@@ -59,12 +59,20 @@ class Config:
         self.default_llm_provider = default_llm_provider or os.getenv("DEFAULT_LLM_PROVIDER", "deepseek")
         self.translation_llm_provider = translation_llm_provider or os.getenv("TRANSLATION_LLM_PROVIDER", "openai")
 
-        # API Configuration
-        self.deepseek_api_key  = deepseek_api_key  or os.getenv("DEEPSEEK_API_KEY")
-        self.openai_api_key    = openai_api_key    or os.getenv("OPENAI_API_KEY")
-        self.anthropic_api_key = anthropic_api_key or os.getenv("ANTHROPIC_API_KEY")
-        self.google_api_key    = google_api_key    or os.getenv("GOOGLE_API_KEY")
-        self.qwen_api_key      = qwen_api_key      or os.getenv("QWEN_API_KEY")
+        # API Configuration — strip placeholder values from .env.template
+        def _clean_key(val: str | None) -> str | None:
+            if not val:
+                return None
+            val = val.strip()
+            if not val or val.startswith("your_") or val.endswith("_here"):
+                return None
+            return val
+
+        self.deepseek_api_key  = _clean_key(deepseek_api_key  or os.getenv("DEEPSEEK_API_KEY"))
+        self.openai_api_key    = _clean_key(openai_api_key    or os.getenv("OPENAI_API_KEY"))
+        self.anthropic_api_key = _clean_key(anthropic_api_key or os.getenv("ANTHROPIC_API_KEY"))
+        self.google_api_key    = _clean_key(google_api_key    or os.getenv("GOOGLE_API_KEY"))
+        self.qwen_api_key      = _clean_key(qwen_api_key      or os.getenv("QWEN_API_KEY"))
 
         # Model Configuration
         self.deepseek_model = deepseek_model or os.getenv("DEEPSEEK_MODEL", "deepseek-chat")
