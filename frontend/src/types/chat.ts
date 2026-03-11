@@ -56,6 +56,7 @@ export interface WebSocketMessage {
     | 'prompt_routing_complete'
     | 'prompt_routing_translation_chunk'
     | 'prompt_routing_translation_complete'
+    | 'stopped'
     | 'error';
   step: string;
   content: string;

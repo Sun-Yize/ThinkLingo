@@ -52,3 +52,4 @@ nginx/ssl/
 *.key
 
 node_modules
+docs/

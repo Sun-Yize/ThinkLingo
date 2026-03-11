@@ -685,6 +685,19 @@ const TranslationChat: React.FC = () => {
         updateLastTurn(ctx, { leftRefinedPromptStatus: 'complete' });
         break;
 
+      case 'stopped':
+        // Mark all streaming statuses as complete so partial content stays visible
+        updateLastTurn(ctx, {
+          status: 'complete',
+          leftAiStatus:  ctx.leftAiAccumulator  ? 'complete' : 'idle',
+          rightAiStatus: ctx.rightAiAccumulator ? 'complete' : 'idle',
+          rightUserStatus: ctx.rightUserAccumulator ? 'complete' : 'idle',
+          rightAiThinkingStatus: ctx.rightAiThinkingAccumulator ? 'complete' : undefined,
+          leftAiThinkingStatus:  ctx.leftAiThinkingAccumulator  ? 'complete' : undefined,
+        });
+        finalizeStream(ctx);
+        break;
+
       case 'error':
         if (msg.metadata?.quota_exceeded) {
         }
@@ -790,6 +803,12 @@ const TranslationChat: React.FC = () => {
       translation_llm_model:    settings.translationLlm.model,
     }));
   };
+
+  const handleStop = useCallback(() => {
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ type: 'stop' }));
+    }
+  }, []);
 
   const t = getT(settings.sourceLanguage);
 
@@ -902,8 +921,29 @@ const TranslationChat: React.FC = () => {
       </header>
 
       {/* ── Dual-column conversation ───────────────────────────────── */}
-      <div className="flex-1 overflow-hidden">
+      <div className="relative flex-1 overflow-hidden">
         <DualColumnView turns={turns} settings={settings} languages={languages} scrollTrigger={scrollTrigger} />
+
+        {/* ── Floating stop pill ──────────────────────────────────── */}
+        {isProcessing && (
+          <div className="absolute bottom-3 left-0 right-0 flex justify-center z-10 pointer-events-none animate-fade-in">
+            <button
+              onClick={handleStop}
+              className="pointer-events-auto flex items-center gap-2 pl-3 pr-4 py-2 rounded-full bg-[#1a1a2e]/90 backdrop-blur-md border border-white/[0.12] text-white/50 hover:text-white/70 hover:border-white/[0.22] hover:bg-[#1a1a2e] shadow-[0_4px_24px_rgba(0,0,0,0.5)] transition-all duration-200 cursor-pointer active:scale-95"
+            >
+              <span className="relative flex items-center justify-center w-5 h-5">
+                <svg className="absolute inset-0 w-5 h-5 animate-spin" viewBox="0 0 20 20" fill="none">
+                  <circle cx="10" cy="10" r="8.5" stroke="rgba(255,255,255,0.12)" strokeWidth="1.5" />
+                  <path d="M10 1.5a8.5 8.5 0 0 1 8.5 8.5" stroke="rgba(255,255,255,0.65)" strokeWidth="1.5" strokeLinecap="round" />
+                </svg>
+                <svg className="relative w-[7px] h-[7px]" viewBox="0 0 8 8" fill="currentColor">
+                  <rect width="8" height="8" rx="1.5" />
+                </svg>
+              </span>
+              <span className="text-[13px] font-medium tracking-wide">{t.stopGeneration}</span>
+            </button>
+          </div>
+        )}
       </div>
 
       {/* ── Input bar ─────────────────────────────────────────────── */}

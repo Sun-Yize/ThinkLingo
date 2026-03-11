@@ -686,10 +686,76 @@ async def websocket_chat_endpoint(websocket: WebSocket):
     # Cancellation signal — set when connection closes to stop producer threads
     cancelled = threading.Event()
 
+    # Active streaming task — tracked so "stop" messages can cancel it
+    active_task: Optional[asyncio.Task] = None
+    # Pending received data — buffered when messages arrive during streaming
+    pending_data: Optional[str] = None
+
+    async def _wait_for_stop_during_stream():
+        """Listen for 'stop' messages while a streaming task is running."""
+        nonlocal pending_data
+        while active_task and not active_task.done():
+            recv_task = asyncio.ensure_future(websocket.receive_text())
+            done, _ = await asyncio.wait(
+                [active_task, recv_task],
+                return_when=asyncio.FIRST_COMPLETED,
+            )
+            if recv_task in done:
+                data = recv_task.result()
+                try:
+                    parsed = json.loads(data)
+                except json.JSONDecodeError:
+                    continue
+                if parsed.get("type") == "stop":
+                    cancelled.set()
+                    # Wait for streaming task to finish after cancellation
+                    try:
+                        await active_task
+                    except Exception:
+                        pass
+                    cancelled.clear()
+                    await manager.send_message(websocket, StreamingMessage(
+                        type="stopped",
+                        step="cancelled",
+                        content=""
+                    ))
+                    return
+                else:
+                    # Non-stop message during streaming — buffer it
+                    pending_data = data
+            if active_task in done:
+                # Streaming completed naturally — cancel dangling recv if needed
+                if not recv_task.done():
+                    recv_task.cancel()
+                    try:
+                        await recv_task
+                    except (asyncio.CancelledError, Exception):
+                        pass
+                return
+
     try:
         while True:
-            # Receive message from client
-            data = await websocket.receive_text()
+            # Use buffered data if available, otherwise receive new message
+            if pending_data is not None:
+                data = pending_data
+                pending_data = None
+            else:
+                data = await websocket.receive_text()
+
+            # --- Parse JSON ---
+            try:
+                request_data = json.loads(data)
+            except json.JSONDecodeError:
+                await manager.send_message(websocket, StreamingMessage(
+                    type="error",
+                    step="validation",
+                    content="Invalid JSON message"
+                ))
+                continue
+
+            # Ignore stray stop messages when nothing is streaming
+            if request_data.get("type") == "stop":
+                continue
 
             # --- Rate limiting: sliding window per connection ---
             now = time.monotonic()
@@ -723,25 +789,30 @@ async def websocket_chat_endpoint(websocket: WebSocket):
                 ))
                 continue
 
-            try:
-                request_data = json.loads(data)
-            except json.JSONDecodeError:
-                await manager.send_message(websocket, StreamingMessage(
-                    type="error",
-                    step="validation",
-                    content="Invalid JSON message"
-                ))
-                continue
-
-            # Process the request with streaming
-            await process_streaming_chat(websocket, request_data, cancelled=cancelled)
+            # Launch streaming as a background task and listen for stop messages
+            cancelled.clear()
+            active_task = asyncio.create_task(
+                process_streaming_chat(websocket, request_data, cancelled=cancelled)
+            )
+            await _wait_for_stop_during_stream()
+            active_task = None
 
     except WebSocketDisconnect:
         cancelled.set()  # signal producer threads to stop immediately
+        if active_task and not active_task.done():
+            try:
+                await active_task
+            except Exception:
+                pass
         manager.disconnect(websocket)
         logger.info("WebSocket client disconnected")
     except Exception as e:
         cancelled.set()
+        if active_task and not active_task.done():
+            try:
+                await active_task
+            except Exception:
+                pass
         logger.error(f"WebSocket error: {type(e).__name__}")
         manager.disconnect(websocket)
 

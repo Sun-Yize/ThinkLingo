@@ -1,6 +1,9 @@
 import React, { useState, useCallback, useMemo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import remarkMath from 'remark-math';
+import rehypeKatex from 'rehype-katex';
+import 'katex/dist/katex.min.css';
 import { getT } from '../utils/i18n';
 
 export type BubbleStatus = 'idle' | 'pending' | 'translating' | 'streaming' | 'complete';
@@ -88,8 +91,9 @@ const PreWithCopy: React.FC<React.HTMLAttributes<HTMLPreElement>> = ({ children,
 // Stable components object for ReactMarkdown — avoids re-creating on every render
 const markdownComponents = { pre: PreWithCopy };
 
-// Stable plugins array
-const remarkPlugins = [remarkGfm];
+// Stable plugins arrays
+const remarkPlugins = [remarkGfm, remarkMath];
+const rehypePlugins = [rehypeKatex];
 
 // Sparkle icon — signals AI role, no emoji
 const SparkleIcon: React.FC<{ className?: string }> = ({ className }) => (
@@ -193,15 +197,28 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
   );
 };
 
+// Convert LaTeX delimiters: \[...\] → $$...$$, \(...\) → $...$
+const preprocessLaTeX = (text: string): string => {
+  // Replace display math \[...\] with $$...$$
+  // Use a regex that matches \[ ... \] across multiple lines
+  text = text.replace(/\\\[([\s\S]*?)\\\]/g, (_, math) => `$$${math}$$`);
+  // Replace inline math \(...\) with $...$
+  text = text.replace(/\\\(([\s\S]*?)\\\)/g, (_, math) => `$${math}$`);
+  return text;
+};
+
 // Memoized markdown renderer — only re-parses when content actually changes
 const MemoizedMarkdown: React.FC<{ content: string; status: BubbleStatus }> = React.memo(
   ({ content, status }) => {
     const rendered = useMemo(
-      () => (
-        <ReactMarkdown remarkPlugins={remarkPlugins} components={markdownComponents}>
-          {content || (status === 'streaming' ? '\u200b' : '')}
-        </ReactMarkdown>
-      ),
+      () => {
+        const processed = content ? preprocessLaTeX(content) : (status === 'streaming' ? '\u200b' : '');
+        return (
+          <ReactMarkdown remarkPlugins={remarkPlugins} rehypePlugins={rehypePlugins} components={markdownComponents}>
+            {processed}
+          </ReactMarkdown>
+        );
+      },
       [content, status],
     );
     return <div className="markdown-body">{rendered}</div>;

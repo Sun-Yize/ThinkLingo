@@ -60,6 +60,9 @@ export interface UIText {
   older: string;
   untitledChat: string;
 
+  // Stop generation
+  stopGeneration: string;
+
   // No API key prompt
   noApiKeyPrompt: string;
 
@@ -121,6 +124,8 @@ const texts: Record<string, UIText> = {
     yesterday: 'Yesterday',
     older: 'Older',
     untitledChat: 'Untitled Chat',
+
+    stopGeneration: 'Stop',
 
     noApiKeyPrompt: 'No API key configured. Please add your API key to start chatting.',
 
@@ -187,6 +192,8 @@ const texts: Record<string, UIText> = {
     older: '更早',
     untitledChat: '未命名对话',
 
+    stopGeneration: '停止',
+
     noApiKeyPrompt: '尚未配置 API Key，请先添加你的 API Key 以开始对话。',
 
     responseTypeLabels: {
@@ -252,6 +259,8 @@ const texts: Record<string, UIText> = {
     older: 'それ以前',
     untitledChat: '無題のチャット',
 
+    stopGeneration: '停止',
+
     noApiKeyPrompt: 'API キーが設定されていません。チャットを開始するには API キーを追加してください。',
 
     responseTypeLabels: {
@@ -316,6 +325,8 @@ const texts: Record<string, UIText> = {
     yesterday: '어제',
     older: '이전',
     untitledChat: '제목 없는 대화',
+
+    stopGeneration: '중지',
 
     noApiKeyPrompt: 'API 키가 설정되지 않았습니다. 대화를 시작하려면 API 키를 추가해 주세요.',
 
