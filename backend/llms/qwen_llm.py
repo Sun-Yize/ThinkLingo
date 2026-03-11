@@ -77,10 +77,15 @@ class QwenLLM(BaseLLM):
             ],
         }
 
-    def _extra_body(self) -> dict:
+    # Default thinking budget (max tokens for the thinking phase).
+    # DashScope-specific; ignored by non-thinking models.
+    DEFAULT_THINKING_BUDGET = 4096
+
+    def _extra_body(self, **kwargs) -> dict:
         """Build extra_body for thinking-enabled models."""
         if self._enable_thinking:
-            return {"enable_thinking": True}
+            budget = kwargs.get("thinking_budget", self.DEFAULT_THINKING_BUDGET)
+            return {"enable_thinking": True, "thinking_budget": budget}
         return {}
 
     def invoke(self, system_prompt: str, user_prompt: str, **kwargs) -> str:
@@ -93,7 +98,7 @@ class QwenLLM(BaseLLM):
             ],
             temperature=kwargs.get("temperature", 0.3),
             max_tokens=kwargs.get("max_tokens", 4000),
-            extra_body=self._extra_body(),
+            extra_body=self._extra_body(**kwargs),
         )
         content = response.choices[0].message.content if response.choices else ""
         # Strip <think>…</think> reasoning blocks
@@ -123,7 +128,7 @@ class QwenLLM(BaseLLM):
             temperature=kwargs.get("temperature", 0.3),
             max_tokens=kwargs.get("max_tokens", 4000),
             stream=True,
-            extra_body=self._extra_body(),
+            extra_body=self._extra_body(**kwargs),
         )
         thinking_started = False
         for chunk in response:

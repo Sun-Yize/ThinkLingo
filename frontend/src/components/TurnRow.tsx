@@ -74,6 +74,82 @@ const ThinkingBlock: React.FC<{
   );
 };
 
+// ── Prompt block (violet / cyan variants) ───────────────────────────
+const PromptBlock: React.FC<{
+  content: string;
+  status?: 'streaming' | 'complete';
+  label: string;
+  expanded: boolean;
+  onToggle: () => void;
+  variant: 'violet' | 'cyan';
+}> = ({ content, status, label, expanded, onToggle, variant }) => {
+  const isStreaming = status === 'streaming';
+  const isViolet = variant === 'violet';
+  const borderColor  = isViolet ? 'border-violet-500/15' : 'border-cyan-500/15';
+  const bgStyle      = isViolet ? { background: 'rgba(139,92,246,0.04)' } : { background: 'rgba(6,182,212,0.04)' };
+  const hoverBg      = isViolet ? 'hover:bg-violet-500/[0.04]' : 'hover:bg-cyan-500/[0.04]';
+  const chevronColor = isViolet ? 'text-violet-400/50' : 'text-cyan-400/50';
+  const iconColor    = isViolet ? 'text-violet-400/50' : 'text-cyan-400/50';
+  const labelColor   = isViolet ? 'text-violet-400/50' : 'text-cyan-400/50';
+  const dotColor     = isViolet ? 'bg-violet-400/40'   : 'bg-cyan-400/40';
+  const borderT      = isViolet ? 'border-violet-500/10' : 'border-cyan-500/10';
+  const cursorColor  = isViolet ? 'bg-violet-400/50'    : 'bg-cyan-400/50';
+  const textColor    = 'text-white/55';
+
+  return (
+    <div className={`rounded-xl border ${borderColor} overflow-hidden`} style={bgStyle}>
+      <button
+        onClick={onToggle}
+        className={`w-full flex items-center gap-1.5 px-3 py-1.5 cursor-pointer ${hoverBg} transition-colors`}
+      >
+        <svg
+          className={`w-3 h-3 ${chevronColor} flex-shrink-0 transition-transform duration-200 ${expanded ? 'rotate-90' : ''}`}
+          viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7"/>
+        </svg>
+        <svg className={`w-3 h-3 ${iconColor} flex-shrink-0`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.324.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.24-.438.613-.431.992a6.759 6.759 0 010 .255c-.007.378.138.75.43.99l1.005.828c.424.35.534.954.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.57 6.57 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.28c-.09.543-.56.941-1.11.941h-2.594c-.55 0-1.02-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.992a6.932 6.932 0 010-.255c.007-.378-.138-.75-.43-.99l-1.004-.828a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.087.22-.128.332-.183.582-.495.644-.869l.214-1.281z"/>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+        </svg>
+        <span className={`text-[10px] font-semibold ${labelColor} uppercase tracking-widest`}>
+          {label}
+        </span>
+        {isStreaming && (
+          <span className="ml-auto flex gap-0.5">
+            {[0, 1, 2].map(i => (
+              <span
+                key={i}
+                className={`w-1 h-1 rounded-full ${dotColor} animate-bounce`}
+                style={{ animationDelay: `${i * 150}ms` }}
+              />
+            ))}
+          </span>
+        )}
+      </button>
+      {expanded && (
+        <div className={`px-3 py-2.5 border-t ${borderT}`}>
+          <p className={`text-[12px] leading-relaxed ${textColor} whitespace-pre-wrap`}>
+            {content}
+            {isStreaming && (
+              <span className={`inline-block w-[2px] h-[13px] ${cursorColor} ml-[1px] align-middle animate-pulse`} />
+            )}
+          </p>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ─────────────────────────────────────────────────────────────────────
+// TurnRow — row-aligned dual-column layout
+//
+// Instead of two independent flex columns, each section (routing label,
+// system prompt, user message, thinking, AI response) is rendered as a
+// grid row with left + right cells. CSS grid auto-sizes each row to the
+// taller cell, keeping corresponding sections horizontally aligned.
+// ─────────────────────────────────────────────────────────────────────
+
 const TurnRow: React.FC<TurnRowProps> = ({ turn, sourceLanguage, processingLanguage, columnFocus }) => {
   const t = getT(sourceLanguage);
   const tRight = getT(processingLanguage);
@@ -82,7 +158,6 @@ const TurnRow: React.FC<TurnRowProps> = ({ turn, sourceLanguage, processingLangu
   const hasThinking = !!(turn.rightAiThinking || turn.leftAiThinking);
   const isThinkingStreaming = turn.rightAiThinkingStatus === 'streaming' || turn.leftAiThinkingStatus === 'streaming';
   const [thinkingExpanded, setThinkingExpanded] = useState(hasThinking && isThinkingStreaming);
-  // Auto-expand when streaming begins
   React.useEffect(() => {
     if (isThinkingStreaming) setThinkingExpanded(true);
   }, [isThinkingStreaming]);
@@ -111,28 +186,32 @@ const TurnRow: React.FC<TurnRowProps> = ({ turn, sourceLanguage, processingLangu
     return undefined;
   }, [turn.leftAiStatus, turn.rightAiStatus, turn.rightUserStatus, t]);
 
+  // ── Cell class helpers ──────────────────────────────────────────
+  // Each cell gets py-2 for inter-row spacing. The grid container adds
+  // pt-2/pb-2 (md: pt-4/pb-4), so total top/bottom matches the
+  // original py-4 md:py-6. Hover bg fills the cell padding seamlessly.
+  const lCell = leftHidden
+    ? 'overflow-hidden'
+    : `min-w-0 py-2 px-3 md:px-6 group-hover:bg-violet-500/[0.018] transition-colors duration-200${showDivider ? ' border-r border-white/[0.04]' : ''}`;
+  const rCell = rightHidden
+    ? 'overflow-hidden'
+    : 'min-w-0 py-2 px-3 md:px-6 group-hover:bg-cyan-500/[0.018] transition-colors duration-200';
+
+  const hasRouting = !!turn.routingLabel;
+  const hasError   = turn.status === 'error' && !!turn.error;
+
   return (
     <div
-      className="relative grid group turn-row"
+      className="relative grid group turn-row pt-2 md:pt-4 pb-2 md:pb-4"
       style={GRID_STYLES[columnFocus]}
     >
-      {/* Left column — source language */}
-      <div
-        className={`overflow-hidden min-w-0 transition-colors duration-200 ${
-          leftHidden
-            /* collapsed: no padding, no content → truly 0-height, 0-width */
-            ? ''
-            : `flex flex-col gap-4 px-3 py-4 md:px-6 md:py-6 group-hover:bg-violet-500/[0.018] ${showDivider ? 'border-r border-white/[0.04]' : ''}`
-        }`}
-      >
-        {!leftHidden && (
-          <>
-            {turn.routingLabel && (
+      {/* ── Row: Routing labels ────────────────────────────────────── */}
+      {hasRouting && (
+        <>
+          <div className={lCell}>
+            {!leftHidden && (
               <div className="flex items-center gap-1.5 px-1">
-                <svg
-                  className="w-3 h-3 flex-shrink-0 text-violet-500/50"
-                  viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
-                >
+                <svg className="w-3 h-3 flex-shrink-0 text-violet-500/50" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
                 </svg>
                 <span className="text-[11px] tracking-wide text-violet-400/55">
@@ -140,62 +219,81 @@ const TurnRow: React.FC<TurnRowProps> = ({ turn, sourceLanguage, processingLangu
                 </span>
               </div>
             )}
-
-            {turn.leftRefinedPrompt && (
-              <div
-                className="rounded-xl border border-violet-500/15 overflow-hidden"
-                style={{ background: 'rgba(139,92,246,0.04)' }}
-              >
-                <button
-                  onClick={togglePrompt}
-                  className="w-full flex items-center gap-1.5 px-3 py-1.5 cursor-pointer hover:bg-violet-500/[0.04] transition-colors"
-                >
-                  <svg
-                    className={`w-3 h-3 text-violet-400/50 flex-shrink-0 transition-transform duration-200 ${promptExpanded ? 'rotate-90' : ''}`}
-                    viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"
-                  >
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7"/>
-                  </svg>
-                  <svg className="w-3 h-3 text-violet-400/50 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.324.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.24-.438.613-.431.992a6.759 6.759 0 010 .255c-.007.378.138.75.43.99l1.005.828c.424.35.534.954.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.57 6.57 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.28c-.09.543-.56.941-1.11.941h-2.594c-.55 0-1.02-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.992a6.932 6.932 0 010-.255c.007-.378-.138-.75-.43-.99l-1.004-.828a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.087.22-.128.332-.183.582-.495.644-.869l.214-1.281z"/>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
-                  </svg>
-                  <span className="text-[10px] font-semibold text-violet-400/50 uppercase tracking-widest">
-                    {t.refinedPromptLabel}
-                  </span>
-                  {turn.leftRefinedPromptStatus === 'streaming' && (
-                    <span className="ml-auto flex gap-0.5">
-                      {[0, 1, 2].map(i => (
-                        <span
-                          key={i}
-                          className="w-1 h-1 rounded-full bg-violet-400/40 animate-bounce"
-                          style={{ animationDelay: `${i * 150}ms` }}
-                        />
-                      ))}
-                    </span>
-                  )}
-                </button>
-                {promptExpanded && (
-                  <div className="px-3 py-2.5 border-t border-violet-500/10">
-                    <p className="text-[12px] leading-relaxed text-white/55 whitespace-pre-wrap">
-                      {turn.leftRefinedPrompt}
-                      {turn.leftRefinedPromptStatus === 'streaming' && (
-                        <span className="inline-block w-[2px] h-[13px] bg-violet-400/50 ml-[1px] align-middle animate-pulse" />
-                      )}
-                    </p>
-                  </div>
-                )}
+          </div>
+          <div className={rCell}>
+            {!rightHidden && (
+              <div className="flex items-center gap-1.5 px-1">
+                <svg className="w-3 h-3 flex-shrink-0 text-cyan-500/50" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                </svg>
+                <span className="text-[11px] tracking-wide text-cyan-400/55">
+                  {tRight.routingBadgePrefix} {turn.routingLabel}
+                </span>
               </div>
             )}
+          </div>
+        </>
+      )}
 
-            <MessageBubble
-              role="user"
-              content={turn.leftUser}
-              status="complete"
-              sourceLanguage={sourceLanguage}
-              variant="default"
-            />
-            {turn.leftAiThinking && (
+      {/* ── Row: Refined / system prompts ──────────────────────────── */}
+      {hasRefinedPrompt && (
+        <>
+          <div className={lCell}>
+            {!leftHidden && turn.leftRefinedPrompt && (
+              <PromptBlock
+                content={turn.leftRefinedPrompt}
+                status={turn.leftRefinedPromptStatus}
+                label={t.refinedPromptLabel}
+                expanded={promptExpanded}
+                onToggle={togglePrompt}
+                variant="violet"
+              />
+            )}
+          </div>
+          <div className={rCell}>
+            {!rightHidden && turn.refinedPrompt && (
+              <PromptBlock
+                content={turn.refinedPrompt}
+                status={turn.refinedPromptStatus}
+                label={tRight.refinedPromptLabel}
+                expanded={promptExpanded}
+                onToggle={togglePrompt}
+                variant="cyan"
+              />
+            )}
+          </div>
+        </>
+      )}
+
+      {/* ── Row: User messages ─────────────────────────────────────── */}
+      <div className={lCell}>
+        {!leftHidden && (
+          <MessageBubble
+            role="user"
+            content={turn.leftUser}
+            status="complete"
+            sourceLanguage={sourceLanguage}
+            variant="default"
+          />
+        )}
+      </div>
+      <div className={rCell}>
+        {!rightHidden && (
+          <MessageBubble
+            role="user"
+            content={turn.rightUser}
+            status={turn.rightUserStatus}
+            sourceLanguage={sourceLanguage}
+            variant="processing"
+          />
+        )}
+      </div>
+
+      {/* ── Row: Thinking blocks ───────────────────────────────────── */}
+      {hasThinking && (
+        <>
+          <div className={lCell}>
+            {!leftHidden && turn.leftAiThinking && (
               <ThinkingBlock
                 content={turn.leftAiThinking}
                 status={turn.leftAiThinkingStatus}
@@ -204,99 +302,9 @@ const TurnRow: React.FC<TurnRowProps> = ({ turn, sourceLanguage, processingLangu
                 onToggle={toggleThinking}
               />
             )}
-            <MessageBubble
-              role="ai"
-              content={turn.leftAi}
-              status={turn.leftAiStatus}
-              sourceLanguage={sourceLanguage}
-              variant="default"
-              statusHint={statusHint}
-            />
-            {turn.status === 'error' && turn.error && (
-              <p className="text-[12px] text-red-400/75 mt-0.5 pl-[28px]">{turn.error}</p>
-            )}
-          </>
-        )}
-      </div>
-
-      {/* Right column — processing language */}
-      <div
-        className={`overflow-hidden min-w-0 transition-colors duration-200 ${
-          rightHidden
-            ? ''
-            : 'flex flex-col gap-4 px-3 py-4 md:px-6 md:py-6 group-hover:bg-cyan-500/[0.018]'
-        }`}
-      >
-        {!rightHidden && (
-          <>
-            {turn.routingLabel && (
-              <div className="flex items-center gap-1.5 px-1">
-                <svg
-                  className="w-3 h-3 flex-shrink-0 text-cyan-500/50"
-                  viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
-                >
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
-                </svg>
-                <span className="text-[11px] tracking-wide text-cyan-400/55">
-                  {tRight.routingBadgePrefix} {turn.routingLabel}
-                </span>
-              </div>
-            )}
-
-            {turn.refinedPrompt && (
-              <div
-                className="rounded-xl border border-cyan-500/15 overflow-hidden"
-                style={{ background: 'rgba(6,182,212,0.04)' }}
-              >
-                <button
-                  onClick={togglePrompt}
-                  className="w-full flex items-center gap-1.5 px-3 py-1.5 cursor-pointer hover:bg-cyan-500/[0.04] transition-colors"
-                >
-                  <svg
-                    className={`w-3 h-3 text-cyan-400/50 flex-shrink-0 transition-transform duration-200 ${promptExpanded ? 'rotate-90' : ''}`}
-                    viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"
-                  >
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7"/>
-                  </svg>
-                  <svg className="w-3 h-3 text-cyan-400/50 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.324.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.24-.438.613-.431.992a6.759 6.759 0 010 .255c-.007.378.138.75.43.99l1.005.828c.424.35.534.954.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.57 6.57 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.28c-.09.543-.56.941-1.11.941h-2.594c-.55 0-1.02-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.992a6.932 6.932 0 010-.255c.007-.378-.138-.75-.43-.99l-1.004-.828a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.087.22-.128.332-.183.582-.495.644-.869l.214-1.281z"/>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
-                  </svg>
-                  <span className="text-[10px] font-semibold text-cyan-400/50 uppercase tracking-widest">
-                    {tRight.refinedPromptLabel}
-                  </span>
-                  {turn.refinedPromptStatus === 'streaming' && (
-                    <span className="ml-auto flex gap-0.5">
-                      {[0, 1, 2].map(i => (
-                        <span
-                          key={i}
-                          className="w-1 h-1 rounded-full bg-cyan-400/40 animate-bounce"
-                          style={{ animationDelay: `${i * 150}ms` }}
-                        />
-                      ))}
-                    </span>
-                  )}
-                </button>
-                {promptExpanded && (
-                  <div className="px-3 py-2.5 border-t border-cyan-500/10">
-                    <p className="text-[12px] leading-relaxed text-white/55 whitespace-pre-wrap">
-                      {turn.refinedPrompt}
-                      {turn.refinedPromptStatus === 'streaming' && (
-                        <span className="inline-block w-[2px] h-[13px] bg-cyan-400/50 ml-[1px] align-middle animate-pulse" />
-                      )}
-                    </p>
-                  </div>
-                )}
-              </div>
-            )}
-            <MessageBubble
-              role="user"
-              content={turn.rightUser}
-              status={turn.rightUserStatus}
-              sourceLanguage={sourceLanguage}
-              variant="processing"
-            />
-            {turn.rightAiThinking && (
+          </div>
+          <div className={rCell}>
+            {!rightHidden && turn.rightAiThinking && (
               <ThinkingBlock
                 content={turn.rightAiThinking}
                 status={turn.rightAiThinkingStatus}
@@ -305,16 +313,46 @@ const TurnRow: React.FC<TurnRowProps> = ({ turn, sourceLanguage, processingLangu
                 onToggle={toggleThinking}
               />
             )}
-            <MessageBubble
-              role="ai"
-              content={turn.rightAi}
-              status={turn.rightAiStatus}
-              sourceLanguage={sourceLanguage}
-              variant="processing"
-            />
-          </>
+          </div>
+        </>
+      )}
+
+      {/* ── Row: AI responses ──────────────────────────────────────── */}
+      <div className={lCell}>
+        {!leftHidden && (
+          <MessageBubble
+            role="ai"
+            content={turn.leftAi}
+            status={turn.leftAiStatus}
+            sourceLanguage={sourceLanguage}
+            variant="default"
+            statusHint={statusHint}
+          />
         )}
       </div>
+      <div className={rCell}>
+        {!rightHidden && (
+          <MessageBubble
+            role="ai"
+            content={turn.rightAi}
+            status={turn.rightAiStatus}
+            sourceLanguage={sourceLanguage}
+            variant="processing"
+          />
+        )}
+      </div>
+
+      {/* ── Row: Error ─────────────────────────────────────────────── */}
+      {hasError && (
+        <>
+          <div className={lCell}>
+            {!leftHidden && (
+              <p className="text-[12px] text-red-400/75 pl-[28px]">{turn.error}</p>
+            )}
+          </div>
+          <div className={rCell} />
+        </>
+      )}
 
       {/* Dual-tone bottom separator */}
       <div
