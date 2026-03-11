@@ -100,7 +100,7 @@ const InputBar: React.FC<InputBarProps> = ({ onSend, disabled, sourceLanguage, s
         }}
       >
         {/* Inner surface */}
-        <div className="flex items-end gap-2 md:gap-3 rounded-[23px] bg-[#0D0D1C] px-3 py-2.5 md:px-5 md:py-3.5">
+        <div className="flex items-center gap-2 md:gap-3 rounded-[23px] bg-[#0D0D1C] px-3 py-2.5 md:px-5 md:py-3.5">
           <textarea
             ref={textareaRef}
             value={message}

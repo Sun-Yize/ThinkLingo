@@ -795,7 +795,7 @@ const TranslationChat: React.FC = () => {
 
   return (
     <div
-      className="h-screen flex overflow-hidden"
+      className="h-screen h-dvh flex overflow-hidden"
       style={{
         background: '#0B0B14',
         backgroundImage:
