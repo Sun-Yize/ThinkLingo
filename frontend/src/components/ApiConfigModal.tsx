@@ -400,7 +400,7 @@ const ApiConfigModal: React.FC<ApiConfigModalProps> = ({
               <p className="text-[11.5px] leading-relaxed text-white/35">
                 {t.moreModelsHint}{' '}
                 <a
-                  href="https://github.com/Sun-Yize/Ask-LLM-in-Multi-Lang"
+                  href="https://github.com/Sun-Yize/ThinkLingo"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-violet-400/70 hover:text-violet-300 underline underline-offset-2 transition-colors"

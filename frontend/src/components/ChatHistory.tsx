@@ -156,7 +156,7 @@ const ChatHistory: React.FC<ChatHistoryProps> = ({
       {/* GitHub link */}
       <div className="flex-shrink-0 px-3 py-3 border-t border-white/[0.06]">
         <a
-          href="https://github.com/Sun-Yize/Ask-LLM-in-Multi-Lang"
+          href="https://github.com/Sun-Yize/ThinkLingo"
           target="_blank"
           rel="noopener noreferrer"
           className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.06] hover:border-white/[0.12] transition-all duration-200"
@@ -166,7 +166,7 @@ const ChatHistory: React.FC<ChatHistoryProps> = ({
           </svg>
           <div className="min-w-0">
             <div className="text-[13px] font-medium text-white/65">GitHub</div>
-            <div className="text-[10.5px] text-white/30 truncate">Sun-Yize/Ask-LLM-in-Multi-Lang</div>
+            <div className="text-[10.5px] text-white/30 truncate">Sun-Yize/ThinkLingo</div>
           </div>
           <svg className="w-3.5 h-3.5 ml-auto flex-shrink-0 text-white/20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25"/>

@@ -854,7 +854,7 @@ const TranslationChat: React.FC = () => {
 
           {/* Logo mark + title — links to GitHub */}
           <a
-            href="https://github.com/Sun-Yize/Ask-LLM-in-Multi-Lang"
+            href="https://github.com/Sun-Yize/ThinkLingo"
             target="_blank"
             rel="noopener noreferrer"
             className="flex items-center gap-2 md:gap-3 min-w-0 no-underline"
