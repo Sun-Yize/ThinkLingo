@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { ConversationMeta } from '../types/chat';
 import { UIText } from '../utils/i18n';
+import { useTheme } from '../utils/theme';
 
 interface ChatHistoryProps {
   isOpen: boolean;
@@ -36,6 +37,7 @@ const ChatHistory: React.FC<ChatHistoryProps> = ({
   onDelete,
   t,
 }) => {
+  const { isDark } = useTheme();
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   const todayItems: ConversationMeta[] = [];
@@ -60,7 +62,7 @@ const ChatHistory: React.FC<ChatHistoryProps> = ({
     if (items.length === 0) return null;
     return (
       <div className="mb-3">
-        <p className="px-3 py-1.5 text-[10px] font-semibold text-white/25 uppercase tracking-widest">
+        <p className={`px-3 py-1.5 text-[10px] font-semibold uppercase tracking-widest ${isDark ? 'text-white/25' : 'text-slate-400'}`}>
           {label}
         </p>
         {items.map(c => {
@@ -70,12 +72,12 @@ const ChatHistory: React.FC<ChatHistoryProps> = ({
               key={c.id}
               className={`group/item relative flex items-center gap-2 px-3 py-2.5 mx-1.5 rounded-lg cursor-pointer transition-colors duration-150 ${
                 isActive
-                  ? 'bg-violet-500/[0.12] text-white/85'
-                  : 'text-white/55 hover:bg-white/[0.05] hover:text-white/75'
+                  ? isDark ? 'bg-violet-500/[0.12] text-white/85' : 'bg-violet-100 text-violet-900'
+                  : isDark ? 'text-white/55 hover:bg-white/[0.05] hover:text-white/75' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-800'
               }`}
               onClick={() => handleSelect(c.id)}
             >
-              <svg className={`w-3.5 h-3.5 flex-shrink-0 ${isActive ? 'text-violet-400/60' : 'text-white/20'}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7">
+              <svg className={`w-3.5 h-3.5 flex-shrink-0 ${isActive ? isDark ? 'text-violet-400/60' : 'text-violet-500' : isDark ? 'text-white/20' : 'text-slate-400'}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 8.25h9m-9 3H12m-9.75 1.51c0 1.6 1.123 2.994 2.707 3.227 1.129.166 2.27.293 3.423.379.35.026.67.21.865.501L12 21l2.755-4.133a1.14 1.14 0 01.865-.501 48.172 48.172 0 003.423-.379c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0012 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018z"/>
               </svg>
               <span className="flex-1 min-w-0 text-[13px] truncate leading-tight">
@@ -83,7 +85,9 @@ const ChatHistory: React.FC<ChatHistoryProps> = ({
               </span>
               <button
                 onClick={e => { e.stopPropagation(); setConfirmDeleteId(c.id); }}
-                className="opacity-100 md:opacity-0 md:group-hover/item:opacity-100 flex-shrink-0 p-1 text-white/20 hover:text-red-400 transition-all duration-150 cursor-pointer rounded hover:bg-white/[0.05]"
+                className={`opacity-100 md:opacity-0 md:group-hover/item:opacity-100 flex-shrink-0 p-1 transition-all duration-150 cursor-pointer rounded ${
+                  isDark ? 'text-white/20 hover:text-red-400 hover:bg-white/[0.05]' : 'text-slate-300 hover:text-red-500 hover:bg-slate-100'
+                }`}
                 aria-label="Delete"
               >
                 <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7">
@@ -103,22 +107,22 @@ const ChatHistory: React.FC<ChatHistoryProps> = ({
     <>
     {/* Mobile backdrop */}
     <div
-      className="md:hidden fixed inset-0 z-40 bg-black/60 backdrop-blur-sm"
+      className={`md:hidden fixed inset-0 z-40 backdrop-blur-sm ${isDark ? 'bg-black/60' : 'bg-black/20'}`}
       onClick={onClose}
     />
     <div
       className="fixed inset-y-0 left-0 z-50 w-[85vw] max-w-[320px] md:relative md:inset-auto md:z-auto md:w-72 h-full flex flex-col flex-shrink-0"
       style={{
-        background: 'rgba(14,14,24,0.96)',
-        borderRight: '1px solid rgba(255,255,255,0.06)',
+        background: isDark ? 'rgba(14,14,24,0.96)' : 'rgba(248,247,252,0.97)',
+        borderRight: isDark ? '1px solid rgba(255,255,255,0.06)' : '1px solid rgba(30,20,50,0.08)',
       }}
     >
       {/* Header */}
-      <div className="flex items-center justify-between px-4 h-[46px] md:h-[58px] flex-shrink-0 border-b border-white/[0.06]">
-        <span className="text-[13px] md:text-[14px] font-semibold text-white/70">{t.chatHistory}</span>
+      <div className={`flex items-center justify-between px-4 h-[46px] md:h-[58px] flex-shrink-0 border-b ${isDark ? 'border-white/[0.06]' : 'border-slate-200'}`}>
+        <span className={`text-[13px] md:text-[14px] font-semibold ${isDark ? 'text-white/70' : 'text-slate-700'}`}>{t.chatHistory}</span>
         <button
           onClick={onClose}
-          className="w-7 h-7 flex items-center justify-center rounded-full text-white/30 hover:text-white/70 hover:bg-white/[0.07] transition-colors cursor-pointer"
+          className={`w-7 h-7 flex items-center justify-center rounded-full transition-colors cursor-pointer ${isDark ? 'text-white/30 hover:text-white/70 hover:bg-white/[0.07]' : 'text-slate-400 hover:text-slate-700 hover:bg-slate-100'}`}
           aria-label="Close"
         >
           <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -131,7 +135,11 @@ const ChatHistory: React.FC<ChatHistoryProps> = ({
       <div className="px-3 py-3 flex-shrink-0">
         <button
           onClick={handleNew}
-          className="w-full flex items-center justify-center gap-2 px-3 py-2.5 text-[13px] font-medium text-white/70 hover:text-white/90 bg-white/[0.04] hover:bg-white/[0.08] rounded-xl border border-white/[0.08] border-dashed hover:border-violet-500/30 transition-all duration-200 cursor-pointer"
+          className={`w-full flex items-center justify-center gap-2 px-3 py-2.5 text-[13px] font-medium rounded-xl border border-dashed transition-all duration-200 cursor-pointer ${
+            isDark
+              ? 'text-white/70 hover:text-white/90 bg-white/[0.04] hover:bg-white/[0.08] border-white/[0.08] hover:border-violet-500/30'
+              : 'text-slate-600 hover:text-slate-800 bg-white hover:bg-violet-50 border-slate-200 hover:border-violet-300'
+          }`}
         >
           <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15"/>
@@ -143,7 +151,7 @@ const ChatHistory: React.FC<ChatHistoryProps> = ({
       {/* Conversation list */}
       <div className="flex-1 overflow-y-auto pb-4">
         {conversations.length === 0 ? (
-          <p className="px-4 py-8 text-[12px] text-white/20 text-center">{t.untitledChat}</p>
+          <p className={`px-4 py-8 text-[12px] text-center ${isDark ? 'text-white/20' : 'text-slate-400'}`}>{t.untitledChat}</p>
         ) : (
           <>
             {renderGroup(t.today, todayItems)}
@@ -154,21 +162,25 @@ const ChatHistory: React.FC<ChatHistoryProps> = ({
       </div>
 
       {/* GitHub link */}
-      <div className="flex-shrink-0 px-3 py-3 border-t border-white/[0.06]">
+      <div className={`flex-shrink-0 px-3 py-3 border-t ${isDark ? 'border-white/[0.06]' : 'border-slate-200'}`}>
         <a
           href="https://github.com/Sun-Yize/ThinkLingo"
           target="_blank"
           rel="noopener noreferrer"
-          className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.06] hover:border-white/[0.12] transition-all duration-200"
+          className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl border transition-all duration-200 ${
+            isDark
+              ? 'bg-white/[0.04] hover:bg-white/[0.08] border-white/[0.06] hover:border-white/[0.12]'
+              : 'bg-white hover:bg-slate-50 border-slate-200 hover:border-slate-300'
+          }`}
         >
-          <svg className="w-5 h-5 text-white/60" viewBox="0 0 24 24" fill="currentColor">
+          <svg className={`w-5 h-5 ${isDark ? 'text-white/60' : 'text-slate-500'}`} viewBox="0 0 24 24" fill="currentColor">
             <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/>
           </svg>
           <div className="min-w-0">
-            <div className="text-[13px] font-medium text-white/65">GitHub</div>
-            <div className="text-[10.5px] text-white/30 truncate">Sun-Yize/ThinkLingo</div>
+            <div className={`text-[13px] font-medium ${isDark ? 'text-white/65' : 'text-slate-600'}`}>GitHub</div>
+            <div className={`text-[10.5px] truncate ${isDark ? 'text-white/30' : 'text-slate-400'}`}>Sun-Yize/ThinkLingo</div>
           </div>
-          <svg className="w-3.5 h-3.5 ml-auto flex-shrink-0 text-white/20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <svg className={`w-3.5 h-3.5 ml-auto flex-shrink-0 ${isDark ? 'text-white/20' : 'text-slate-400'}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25"/>
           </svg>
         </a>
@@ -177,26 +189,34 @@ const ChatHistory: React.FC<ChatHistoryProps> = ({
       {/* Delete confirmation modal */}
       {confirmDeleteId && (
         <div
-          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm"
+          className={`fixed inset-0 z-[60] flex items-center justify-center backdrop-blur-sm ${isDark ? 'bg-black/60' : 'bg-black/20'}`}
           onClick={() => setConfirmDeleteId(null)}
         >
           <div
-            className="w-[calc(100%-2rem)] max-w-80 rounded-2xl border border-white/[0.08] p-6"
-            style={{ background: 'rgba(18,18,30,0.97)', boxShadow: '0 24px 64px rgba(0,0,0,0.55)' }}
+            className={`w-[calc(100%-2rem)] max-w-80 rounded-2xl border p-6 ${isDark ? 'border-white/[0.08]' : 'border-slate-200'}`}
+            style={{ background: 'var(--modal-bg)', boxShadow: 'var(--modal-shadow)' }}
             onClick={e => e.stopPropagation()}
           >
-            <h3 className="text-[15px] font-semibold text-white/85 mb-2">{t.confirmDeleteTitle}</h3>
-            <p className="text-[13px] text-white/50 leading-relaxed mb-5">{t.confirmDeleteMessage}</p>
+            <h3 className={`text-[15px] font-semibold mb-2 ${isDark ? 'text-white/85' : 'text-slate-800'}`}>{t.confirmDeleteTitle}</h3>
+            <p className={`text-[13px] leading-relaxed mb-5 ${isDark ? 'text-white/50' : 'text-slate-500'}`}>{t.confirmDeleteMessage}</p>
             <div className="flex justify-end gap-2.5">
               <button
                 onClick={() => setConfirmDeleteId(null)}
-                className="px-4 py-2 text-[13px] font-medium text-white/50 hover:text-white/80 bg-white/[0.05] hover:bg-white/[0.10] rounded-xl border border-white/[0.08] transition-colors cursor-pointer"
+                className={`px-4 py-2 text-[13px] font-medium rounded-xl border transition-colors cursor-pointer ${
+                  isDark
+                    ? 'text-white/50 hover:text-white/80 bg-white/[0.05] hover:bg-white/[0.10] border-white/[0.08]'
+                    : 'text-slate-500 hover:text-slate-700 bg-white hover:bg-slate-50 border-slate-200'
+                }`}
               >
                 {t.cancel}
               </button>
               <button
                 onClick={() => { onDelete(confirmDeleteId); setConfirmDeleteId(null); }}
-                className="px-4 py-2 text-[13px] font-medium text-red-300 hover:text-red-200 bg-red-500/15 hover:bg-red-500/25 rounded-xl border border-red-500/20 transition-colors cursor-pointer"
+                className={`px-4 py-2 text-[13px] font-medium rounded-xl border transition-colors cursor-pointer ${
+                  isDark
+                    ? 'text-red-300 hover:text-red-200 bg-red-500/15 hover:bg-red-500/25 border-red-500/20'
+                    : 'text-red-600 hover:text-red-700 bg-red-50 hover:bg-red-100 border-red-200'
+                }`}
               >
                 {t.deleteChat}
               </button>

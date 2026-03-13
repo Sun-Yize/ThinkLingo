@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import Select, { StylesConfig } from 'react-select';
+import Select from 'react-select';
 import { ChatSettings } from '../types/chat';
 import { getT } from '../utils/i18n';
+import { useTheme, getSelectStyles } from '../utils/theme';
 
 interface ApiConfigModalProps {
   isOpen: boolean;
@@ -13,55 +14,6 @@ interface ApiConfigModalProps {
 }
 
 type SelectOption = { value: string; label: string; isDisabled?: boolean };
-
-const selectDarkStyles: StylesConfig<SelectOption, false> = {
-  control: (base, state) => ({
-    ...base,
-    backgroundColor: 'rgba(255,255,255,0.04)',
-    borderColor: state.isFocused ? 'rgba(139,92,246,0.55)' : 'rgba(255,255,255,0.10)',
-    borderRadius: '10px',
-    boxShadow: state.isFocused ? '0 0 0 3px rgba(124,58,237,0.14)' : 'none',
-    minHeight: '38px',
-    fontSize: '13px',
-    cursor: 'pointer',
-    transition: 'border-color 0.15s, box-shadow 0.15s',
-    '&:hover': { borderColor: 'rgba(255,255,255,0.20)' },
-  }),
-  menu: (base) => ({
-    ...base,
-    backgroundColor: '#181828',
-    border: '1px solid rgba(255,255,255,0.08)',
-    borderRadius: '10px',
-    boxShadow: '0 12px 40px rgba(0,0,0,0.55)',
-    overflow: 'hidden',
-  }),
-  menuList: (base) => ({ ...base, padding: '4px' }),
-  option: (base, state) => ({
-    ...base,
-    backgroundColor: state.isSelected
-      ? 'rgba(124,58,237,0.28)'
-      : state.isFocused && !state.isDisabled ? 'rgba(255,255,255,0.06)' : 'transparent',
-    color: state.isDisabled
-      ? 'rgba(255,255,255,0.20)'
-      : state.isSelected ? '#c4b5fd' : 'rgba(255,255,255,0.78)',
-    fontSize: '13px',
-    padding: '7px 10px',
-    borderRadius: '7px',
-    cursor: state.isDisabled ? 'not-allowed' : 'pointer',
-    transition: 'background-color 0.1s',
-  }),
-  singleValue: (base) => ({ ...base, color: 'rgba(255,255,255,0.85)', fontSize: '13px' }),
-  placeholder: (base) => ({ ...base, color: 'rgba(255,255,255,0.28)', fontSize: '13px' }),
-  indicatorSeparator: (base) => ({ ...base, backgroundColor: 'rgba(255,255,255,0.10)' }),
-  dropdownIndicator: (base) => ({
-    ...base,
-    color: 'rgba(255,255,255,0.28)',
-    padding: '0 6px',
-    '&:hover': { color: 'rgba(255,255,255,0.55)' },
-  }),
-  input: (base) => ({ ...base, color: 'rgba(255,255,255,0.85)' }),
-  menuPortal: (base) => ({ ...base, zIndex: 9999 }),
-};
 
 // Per-provider model lists
 const PROVIDER_MODELS: Record<string, string[]> = {
@@ -111,11 +63,13 @@ const ApiConfigModal: React.FC<ApiConfigModalProps> = ({
   allowUserApiKeys = true,
   availableProviders = [],
 }) => {
+  const { isDark } = useTheme();
   const [visible, setVisible] = useState<Set<string>>(new Set());
 
   if (!isOpen) return null;
 
   const t = getT(settings.sourceLanguage);
+  const selectStyles = getSelectStyles(isDark);
 
   // Map provider → whether a usable key exists (server-configured or user-provided)
   const _userKeyMap: Record<string, string> = {
@@ -197,12 +151,12 @@ const ApiConfigModal: React.FC<ApiConfigModalProps> = ({
     const isAuto = provider === 'auto';
     return (
       <div>
-        <label className="block text-[11px] font-medium text-white/35 mb-1.5 uppercase tracking-wider">
+        <label className={`block text-[11px] font-medium mb-1.5 uppercase tracking-wider ${isDark ? 'text-white/35' : 'text-slate-500'}`}>
           {label}
         </label>
         <div className="grid grid-cols-2 gap-2">
           <Select
-            styles={selectDarkStyles}
+            styles={selectStyles}
             value={providerOpts.find(o => o.value === provider) ?? null}
             onChange={opt => opt && handleProviderChange(role, opt.value)}
             options={providerOpts}
@@ -210,7 +164,7 @@ const ApiConfigModal: React.FC<ApiConfigModalProps> = ({
             menuPosition="fixed"
           />
           <Select
-            styles={selectDarkStyles}
+            styles={selectStyles}
             value={resolveModelValue(role)}
             onChange={opt => opt && handleModelChange(role, opt.value)}
             options={modelOptions(provider, role)}
@@ -226,30 +180,30 @@ const ApiConfigModal: React.FC<ApiConfigModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 backdrop-blur-[3px]"
+      className={`fixed inset-0 z-50 flex items-center justify-center ${isDark ? 'bg-black/55' : 'bg-black/25'} backdrop-blur-[3px]`}
       onClick={onClose}
     >
       <div
-        className="rounded-2xl border border-white/[0.08] w-full max-w-md mx-4 overflow-y-auto max-h-[90vh]"
+        className={`rounded-2xl border w-full max-w-md mx-4 overflow-y-auto max-h-[90vh] ${isDark ? 'border-white/[0.08]' : 'border-slate-200'}`}
         style={{
-          background: 'rgba(18,18,30,0.92)',
+          background: 'var(--modal-bg)',
           backdropFilter: 'blur(24px)',
-          boxShadow: '0 24px 64px rgba(0,0,0,0.65), 0 8px 24px rgba(0,0,0,0.35)',
+          boxShadow: 'var(--modal-shadow)',
         }}
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-white/[0.06]">
+        <div className={`flex items-center justify-between px-5 py-4 border-b ${isDark ? 'border-white/[0.06]' : 'border-slate-200'}`}>
           <div className="flex items-center gap-2">
-            <svg className="w-4 h-4 text-violet-400/80" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6">
+            <svg className={`w-4 h-4 ${isDark ? 'text-violet-400/80' : 'text-violet-500'}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6">
               <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 5.25a3 3 0 013 3m3 0a6 6 0 01-7.029 5.912c-.563-.097-1.159.026-1.563.43L10.5 17.25H8.25v2.25H6v2.25H2.25v-2.818c0-.597.237-1.17.659-1.591l6.499-6.499c.404-.404.527-1 .43-1.563A6 6 0 1121.75 8.25z"/>
             </svg>
-            <h2 className="text-[15px] font-semibold text-white/85">{t.apiConfig}</h2>
+            <h2 className={`text-[15px] font-semibold ${isDark ? 'text-white/85' : 'text-slate-800'}`}>{t.apiConfig}</h2>
           </div>
           <button
             onClick={onClose}
             aria-label="Close"
-            className="w-7 h-7 flex items-center justify-center rounded-full text-white/30 hover:text-white/70 hover:bg-white/[0.07] transition-colors cursor-pointer"
+            className={`w-7 h-7 flex items-center justify-center rounded-full transition-colors cursor-pointer ${isDark ? 'text-white/30 hover:text-white/70 hover:bg-white/[0.07]' : 'text-slate-400 hover:text-slate-700 hover:bg-slate-100'}`}
           >
             <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12"/>
@@ -262,7 +216,7 @@ const ApiConfigModal: React.FC<ApiConfigModalProps> = ({
 
           {/* ── LLM Roles ─────────────────────────────────────────── */}
           <div className="space-y-3">
-            <p className="text-[11px] font-semibold text-violet-400/80 uppercase tracking-wider">
+            <p className={`text-[11px] font-semibold uppercase tracking-wider ${isDark ? 'text-violet-400/80' : 'text-violet-600'}`}>
               LLM Roles
             </p>
 
@@ -272,11 +226,11 @@ const ApiConfigModal: React.FC<ApiConfigModalProps> = ({
             {/* Translation — method toggle + optional LLM row */}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <label className="text-[11px] font-medium text-white/35 uppercase tracking-wider">
+                <label className={`text-[11px] font-medium uppercase tracking-wider ${isDark ? 'text-white/35' : 'text-slate-500'}`}>
                   {t.translationLlmProvider}
                 </label>
                 {/* Google / LLM toggle */}
-                <div className="flex items-center rounded-lg border border-white/[0.08] overflow-hidden">
+                <div className={`flex items-center rounded-lg border overflow-hidden ${isDark ? 'border-white/[0.08]' : 'border-slate-200'}`}>
                   {(['google', 'llm'] as const).map(method => {
                     const active = settings.translationMethod === method;
                     return (
@@ -286,8 +240,8 @@ const ApiConfigModal: React.FC<ApiConfigModalProps> = ({
                         onClick={() => onSettingsChange({ ...settings, translationMethod: method })}
                         className={`px-2.5 py-1 text-[11px] font-medium transition-colors cursor-pointer ${
                           active
-                            ? 'bg-violet-500/25 text-violet-300'
-                            : 'text-white/35 hover:text-white/60 hover:bg-white/[0.04]'
+                            ? isDark ? 'bg-violet-500/25 text-violet-300' : 'bg-violet-100 text-violet-700'
+                            : isDark ? 'text-white/35 hover:text-white/60 hover:bg-white/[0.04]' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'
                         }`}
                       >
                         {method === 'google' ? 'Google Translate' : 'LLM'}
@@ -299,7 +253,7 @@ const ApiConfigModal: React.FC<ApiConfigModalProps> = ({
               {settings.translationMethod === 'llm' && (
                 <div className="grid grid-cols-2 gap-2">
                   <Select
-                    styles={selectDarkStyles}
+                    styles={selectStyles}
                     value={transProviderOptions.find(o => o.value === settings.translationLlm.provider) ?? null}
                     onChange={opt => opt && handleProviderChange('translationLlm', opt.value)}
                     options={transProviderOptions}
@@ -307,7 +261,7 @@ const ApiConfigModal: React.FC<ApiConfigModalProps> = ({
                     menuPosition="fixed"
                   />
                   <Select
-                    styles={selectDarkStyles}
+                    styles={selectStyles}
                     value={resolveModelValue('translationLlm')}
                     onChange={opt => opt && handleModelChange('translationLlm', opt.value)}
                     options={modelOptions(settings.translationLlm.provider, 'translationLlm')}
@@ -324,15 +278,15 @@ const ApiConfigModal: React.FC<ApiConfigModalProps> = ({
           {/* ── API Keys — only shown when user keys are allowed ── */}
           {allowUserApiKeys && (
           <div className="space-y-2">
-            <p className="text-[11px] font-semibold text-violet-400/80 uppercase tracking-wider">
+            <p className={`text-[11px] font-semibold uppercase tracking-wider ${isDark ? 'text-violet-400/80' : 'text-violet-600'}`}>
               API Keys
             </p>
-            <div className="rounded-xl border border-white/[0.08] overflow-hidden divide-y divide-white/[0.06]">
+            <div className={`rounded-xl border overflow-hidden ${isDark ? 'border-white/[0.08] divide-y divide-white/[0.06]' : 'border-slate-200 divide-y divide-slate-100'}`}>
               {API_KEY_ROWS.map(({ field, label, placeholder }) => (
                 <React.Fragment key={field}>
                   {/* Key input row */}
-                  <div className="flex items-center gap-3 px-3 py-2.5 bg-white/[0.02]">
-                    <span className="w-[58px] shrink-0 text-[12px] font-medium text-white/50">
+                  <div className={`flex items-center gap-3 px-3 py-2.5 ${isDark ? 'bg-white/[0.02]' : 'bg-white'}`}>
+                    <span className={`w-[58px] shrink-0 text-[12px] font-medium ${isDark ? 'text-white/50' : 'text-slate-500'}`}>
                       {label}
                     </span>
                     <input
@@ -340,27 +294,27 @@ const ApiConfigModal: React.FC<ApiConfigModalProps> = ({
                       value={settings.apiKeys[field] ?? ''}
                       onChange={e => updateApiKey(field, e.target.value)}
                       placeholder={placeholder}
-                      className="flex-1 min-w-0 bg-transparent text-white/80 text-[13px] outline-none placeholder:text-white/18"
+                      className={`flex-1 min-w-0 bg-transparent text-[13px] outline-none ${isDark ? 'text-white/80 placeholder:text-white/18' : 'text-slate-700 placeholder:text-slate-300'}`}
                     />
                     <button
                       type="button"
                       onClick={() => toggleVisible(field)}
-                      className="shrink-0 text-white/25 hover:text-white/55 transition-colors cursor-pointer"
+                      className={`shrink-0 transition-colors cursor-pointer ${isDark ? 'text-white/25 hover:text-white/55' : 'text-slate-300 hover:text-slate-500'}`}
                       aria-label={visible.has(field) ? 'Hide key' : 'Show key'}
                     >
                       {visible.has(field) ? <EyeOffIcon /> : <EyeIcon />}
                     </button>
                     <span
                       className={`shrink-0 w-2 h-2 rounded-full transition-colors ${
-                        settings.apiKeys[field] ? 'bg-emerald-400' : 'bg-white/15'
+                        settings.apiKeys[field] ? 'bg-emerald-400' : isDark ? 'bg-white/15' : 'bg-slate-200'
                       }`}
                     />
                   </div>
 
                   {/* Qwen region toggle — integrated as a sub-row */}
                   {field === 'qwen' && (
-                    <div className="flex items-center gap-3 px-3 py-2 bg-black/[0.12]">
-                      <span className="w-[58px] shrink-0 text-[10px] font-semibold text-white/25 uppercase tracking-wider">
+                    <div className={`flex items-center gap-3 px-3 py-2 ${isDark ? 'bg-black/[0.12]' : 'bg-slate-50'}`}>
+                      <span className={`w-[58px] shrink-0 text-[10px] font-semibold uppercase tracking-wider ${isDark ? 'text-white/25' : 'text-slate-400'}`}>
                         Qwen Region
                       </span>
                       <div className="flex items-center gap-4">
@@ -372,10 +326,12 @@ const ApiConfigModal: React.FC<ApiConfigModalProps> = ({
                               type="button"
                               onClick={() => onSettingsChange({ ...settings, qwenRegion: region })}
                               className={`flex items-center gap-1.5 text-[12px] transition-colors cursor-pointer ${
-                                active ? 'text-violet-300' : 'text-white/35 hover:text-white/60'
+                                active
+                                  ? isDark ? 'text-violet-300' : 'text-violet-600'
+                                  : isDark ? 'text-white/35 hover:text-white/60' : 'text-slate-400 hover:text-slate-600'
                               }`}
                             >
-                              <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${active ? 'bg-violet-400' : 'bg-white/20'}`} />
+                              <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${active ? isDark ? 'bg-violet-400' : 'bg-violet-500' : isDark ? 'bg-white/20' : 'bg-slate-300'}`} />
                               {region === 'cn' ? '中国大陆' : 'International'}
                             </button>
                           );
@@ -393,17 +349,17 @@ const ApiConfigModal: React.FC<ApiConfigModalProps> = ({
         {/* Footer */}
         <div className="px-5 pb-5 space-y-3">
           {!allowUserApiKeys && (
-            <div className="flex items-start gap-2.5 px-3 py-2.5 rounded-xl bg-white/[0.03] border border-white/[0.06]">
-              <svg className="w-4 h-4 flex-shrink-0 mt-[1px] text-white/30" viewBox="0 0 24 24" fill="currentColor">
+            <div className={`flex items-start gap-2.5 px-3 py-2.5 rounded-xl border ${isDark ? 'bg-white/[0.03] border-white/[0.06]' : 'bg-slate-50 border-slate-200'}`}>
+              <svg className={`w-4 h-4 flex-shrink-0 mt-[1px] ${isDark ? 'text-white/30' : 'text-slate-400'}`} viewBox="0 0 24 24" fill="currentColor">
                 <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/>
               </svg>
-              <p className="text-[11.5px] leading-relaxed text-white/35">
+              <p className={`text-[11.5px] leading-relaxed ${isDark ? 'text-white/35' : 'text-slate-500'}`}>
                 {t.moreModelsHint}{' '}
                 <a
                   href="https://github.com/Sun-Yize/ThinkLingo"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-violet-400/70 hover:text-violet-300 underline underline-offset-2 transition-colors"
+                  className={`underline underline-offset-2 transition-colors ${isDark ? 'text-violet-400/70 hover:text-violet-300' : 'text-violet-600 hover:text-violet-500'}`}
                 >
                   GitHub
                 </a>

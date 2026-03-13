@@ -2,11 +2,171 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ── Theme CSS custom properties ─────────────────────────────────────── */
+:root {
+  /* Page */
+  --page-bg: #0B0B14;
+  --ambient-violet: rgba(124,58,237,0.16);
+  --ambient-cyan: rgba(6,182,212,0.12);
+
+  /* Chrome (header, column headers, input area) */
+  --chrome-bg: rgba(11,11,20,0.82);
+  --chrome-bg-solid: rgba(11,11,20,0.90);
+  --chrome-bg-mobile: rgba(11,11,20,0.92);
+  --input-area-bg: rgba(10,10,18,0.88);
+  --input-inner-bg: #0D0D1C;
+
+  /* Surfaces */
+  --sidebar-bg: rgba(14,14,24,0.96);
+  --sidebar-border: rgba(255,255,255,0.06);
+  --modal-bg: rgba(18,18,30,0.92);
+  --modal-bg-solid: rgba(18,18,30,0.97);
+  --modal-shadow: 0 24px 64px rgba(0,0,0,0.65), 0 8px 24px rgba(0,0,0,0.35);
+  --stop-btn-bg: rgba(26,26,46,0.90);
+
+  /* Overlays */
+  --overlay: rgba(0,0,0,0.55);
+  --overlay-heavy: rgba(0,0,0,0.60);
+
+  /* Separator gradients */
+  --sep-header: linear-gradient(90deg, rgba(139,92,246,0.35) 0%, rgba(139,92,246,0.35) 50%, rgba(6,182,212,0.28) 50%, rgba(6,182,212,0.28) 100%);
+  --sep-col-header: linear-gradient(90deg, rgba(139,92,246,0.18) 0%, rgba(139,92,246,0.18) 50%, rgba(6,182,212,0.14) 50%, rgba(6,182,212,0.14) 100%);
+  --sep-input: linear-gradient(90deg, rgba(139,92,246,0.22) 0%, rgba(139,92,246,0.22) 50%, rgba(6,182,212,0.17) 50%, rgba(6,182,212,0.17) 100%);
+  --sep-row: linear-gradient(90deg, rgba(139,92,246,0.10) 0%, rgba(139,92,246,0.10) 50%, rgba(6,182,212,0.08) 50%, rgba(6,182,212,0.08) 100%);
+
+  /* Title gradient */
+  --title-gradient: linear-gradient(90deg, #c4b5fd 0%, #f0f0ff 50%, #67e8f9 100%);
+
+  /* Input border gradients */
+  --input-border-focus: linear-gradient(135deg, rgba(139,92,246,0.75) 0%, rgba(167,139,250,0.30) 45%, rgba(34,211,238,0.60) 100%);
+  --input-border-idle: linear-gradient(135deg, rgba(139,92,246,0.25) 0%, rgba(160,160,160,0.25) 50%, rgba(6,182,212,0.20) 100%);
+  --input-border-disabled: rgba(255,255,255,0.05);
+  --input-shadow-focus: 0 0 0 3px rgba(124,58,237,0.10), 0 8px 32px rgba(124,58,237,0.14);
+  --input-shadow-idle: 0 4px 20px rgba(0,0,0,0.30);
+
+  /* Collapsible blocks */
+  --thinking-bg: rgba(6,182,212,0.03);
+  --prompt-bg-violet: rgba(139,92,246,0.04);
+  --prompt-bg-cyan: rgba(6,182,212,0.04);
+
+  /* Scrollbar */
+  --scrollbar-thumb: rgba(255,255,255,0.10);
+  --scrollbar-thumb-hover: rgba(255,255,255,0.18);
+
+  /* Skeleton shimmer */
+  --shimmer-lo: rgba(255,255,255,0.05);
+  --shimmer-hi: rgba(255,255,255,0.12);
+
+  /* Streaming cursor */
+  --cursor-violet: #a78bfa;
+  --cursor-cyan: #67e8f9;
+
+  /* Markdown */
+  --md-text: rgba(255,255,255,0.80);
+  --md-strong: rgba(255,255,255,0.95);
+  --md-em: rgba(255,255,255,0.60);
+  --md-heading: rgba(255,255,255,0.92);
+  --md-code-bg: rgba(139,92,246,0.14);
+  --md-code-border: rgba(139,92,246,0.22);
+  --md-code-color: #c4b5fd;
+  --md-pre-bg: rgba(255,255,255,0.04);
+  --md-pre-border: rgba(255,255,255,0.07);
+  --md-pre-code: rgba(255,255,255,0.78);
+  --md-blockquote-border: rgba(139,92,246,0.38);
+  --md-blockquote-text: rgba(255,255,255,0.50);
+  --md-table-border: rgba(255,255,255,0.08);
+  --md-th-bg: rgba(255,255,255,0.05);
+  --md-th-text: rgba(255,255,255,0.88);
+  --md-link: #a78bfa;
+  --md-hr: rgba(255,255,255,0.07);
+  --md-katex: rgba(255,255,255,0.88);
+}
+
+/* ── Light theme overrides ───────────────────────────────────────────── */
+[data-theme="light"] {
+  /* Page */
+  --page-bg: #F8F7FC;
+  --ambient-violet: rgba(124,58,237,0.06);
+  --ambient-cyan: rgba(6,182,212,0.04);
+
+  /* Chrome */
+  --chrome-bg: rgba(248,247,252,0.88);
+  --chrome-bg-solid: rgba(248,247,252,0.94);
+  --chrome-bg-mobile: rgba(248,247,252,0.95);
+  --input-area-bg: rgba(248,247,252,0.92);
+  --input-inner-bg: #FFFFFF;
+
+  /* Surfaces */
+  --sidebar-bg: rgba(245,243,250,0.97);
+  --sidebar-border: rgba(30,20,50,0.08);
+  --modal-bg: rgba(255,255,255,0.96);
+  --modal-bg-solid: rgba(255,255,255,0.98);
+  --modal-shadow: 0 12px 40px rgba(0,0,0,0.08), 0 4px 12px rgba(0,0,0,0.05);
+  --stop-btn-bg: rgba(255,255,255,0.92);
+
+  /* Overlays */
+  --overlay: rgba(0,0,0,0.25);
+  --overlay-heavy: rgba(0,0,0,0.30);
+
+  /* Separator gradients */
+  --sep-header: linear-gradient(90deg, rgba(139,92,246,0.22) 0%, rgba(139,92,246,0.22) 50%, rgba(6,182,212,0.18) 50%, rgba(6,182,212,0.18) 100%);
+  --sep-col-header: linear-gradient(90deg, rgba(139,92,246,0.12) 0%, rgba(139,92,246,0.12) 50%, rgba(6,182,212,0.10) 50%, rgba(6,182,212,0.10) 100%);
+  --sep-input: linear-gradient(90deg, rgba(139,92,246,0.14) 0%, rgba(139,92,246,0.14) 50%, rgba(6,182,212,0.11) 50%, rgba(6,182,212,0.11) 100%);
+  --sep-row: linear-gradient(90deg, rgba(139,92,246,0.07) 0%, rgba(139,92,246,0.07) 50%, rgba(6,182,212,0.05) 50%, rgba(6,182,212,0.05) 100%);
+
+  /* Title gradient */
+  --title-gradient: linear-gradient(90deg, #7c3aed 0%, #4c1d95 50%, #0891b2 100%);
+
+  /* Input border gradients */
+  --input-border-focus: linear-gradient(135deg, rgba(139,92,246,0.55) 0%, rgba(167,139,250,0.25) 45%, rgba(34,211,238,0.40) 100%);
+  --input-border-idle: linear-gradient(135deg, rgba(139,92,246,0.16) 0%, rgba(160,160,160,0.12) 50%, rgba(6,182,212,0.12) 100%);
+  --input-border-disabled: rgba(30,20,50,0.06);
+  --input-shadow-focus: 0 0 0 3px rgba(124,58,237,0.08), 0 4px 16px rgba(0,0,0,0.06);
+  --input-shadow-idle: 0 2px 12px rgba(0,0,0,0.05);
+
+  /* Collapsible blocks */
+  --thinking-bg: rgba(6,182,212,0.04);
+  --prompt-bg-violet: rgba(139,92,246,0.05);
+  --prompt-bg-cyan: rgba(6,182,212,0.05);
+
+  /* Scrollbar */
+  --scrollbar-thumb: rgba(30,20,50,0.12);
+  --scrollbar-thumb-hover: rgba(30,20,50,0.22);
+
+  /* Skeleton shimmer */
+  --shimmer-lo: rgba(30,20,50,0.04);
+  --shimmer-hi: rgba(30,20,50,0.10);
+
+  /* Streaming cursor */
+  --cursor-violet: #7c3aed;
+  --cursor-cyan: #0891b2;
+
+  /* Markdown */
+  --md-text: rgba(30,20,50,0.78);
+  --md-strong: rgba(30,20,50,0.95);
+  --md-em: rgba(30,20,50,0.55);
+  --md-heading: rgba(30,20,50,0.92);
+  --md-code-bg: rgba(139,92,246,0.08);
+  --md-code-border: rgba(139,92,246,0.16);
+  --md-code-color: #7c3aed;
+  --md-pre-bg: rgba(30,20,50,0.03);
+  --md-pre-border: rgba(30,20,50,0.08);
+  --md-pre-code: rgba(30,20,50,0.75);
+  --md-blockquote-border: rgba(139,92,246,0.30);
+  --md-blockquote-text: rgba(30,20,50,0.50);
+  --md-table-border: rgba(30,20,50,0.10);
+  --md-th-bg: rgba(30,20,50,0.04);
+  --md-th-text: rgba(30,20,50,0.85);
+  --md-link: #7c3aed;
+  --md-hr: rgba(30,20,50,0.08);
+  --md-katex: rgba(30,20,50,0.88);
+}
+
+/* ── Base styles ─────────────────────────────────────────────────────── */
 @layer base {
   html, body {
     overflow: hidden;
     overscroll-behavior: none;
-    /* Prevent iOS bounce/pull-to-refresh and ensure body fills viewport */
     position: fixed;
     width: 100%;
     height: 100%;
@@ -16,16 +176,15 @@
     font-family: 'DM Sans', 'Inter', system-ui, sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    /* Prevent iOS from zooming on input focus (font-size < 16px) */
     -webkit-text-size-adjust: 100%;
   }
 
   body {
     margin: 0;
     padding: 0;
-    background-color: #0B0B14;
-    color: rgba(255, 255, 255, 0.88);
-    /* Safe area insets for notched devices */
+    background-color: var(--page-bg);
+    color: var(--md-text);
+    transition: background-color 0.3s ease, color 0.3s ease;
     padding-left: env(safe-area-inset-left);
     padding-right: env(safe-area-inset-right);
   }
@@ -33,12 +192,10 @@
 
 /* ── Mobile touch optimizations ──────────────────────────────────── */
 @media (max-width: 767px) {
-  /* Prevent text selection on interactive elements */
   button, [role="button"] {
     -webkit-tap-highlight-color: transparent;
   }
 
-  /* Slightly larger touch targets on mobile for scrollbar-less UX */
   ::-webkit-scrollbar {
     width: 0;
     height: 0;
@@ -56,12 +213,12 @@
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.10);
+  background: var(--scrollbar-thumb);
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.18);
+  background: var(--scrollbar-thumb-hover);
 }
 
 /* ── Turn row entrance animation ──────────────────────────────────── */
@@ -102,11 +259,11 @@
 }
 
 .streaming-cursor::after {
-  color: #a78bfa; /* violet — left column */
+  color: var(--cursor-violet);
 }
 
 .streaming-cursor-cyan::after {
-  color: #67e8f9; /* cyan — right column */
+  color: var(--cursor-cyan);
 }
 
 /* ── "翻译中…" shimmer skeleton ──────────────────────────────────── */
@@ -119,9 +276,9 @@
   display: inline-block;
   background: linear-gradient(
     90deg,
-    rgba(255, 255, 255, 0.05) 25%,
-    rgba(255, 255, 255, 0.12) 50%,
-    rgba(255, 255, 255, 0.05) 75%
+    var(--shimmer-lo) 25%,
+    var(--shimmer-hi) 50%,
+    var(--shimmer-lo) 75%
   );
   background-size: 1200px 100%;
   animation: shimmer 1.8s infinite linear;
@@ -132,7 +289,7 @@
 /* ── Markdown body inside AI responses ───────────────────────────── */
 .markdown-body {
   line-height: 1.7;
-  color: rgba(255, 255, 255, 0.80);
+  color: var(--md-text);
 }
 
 .markdown-body p {
@@ -160,18 +317,18 @@
 }
 
 .markdown-body code {
-  background: rgba(139, 92, 246, 0.14);
-  border: 1px solid rgba(139, 92, 246, 0.22);
+  background: var(--md-code-bg);
+  border: 1px solid var(--md-code-border);
   border-radius: 5px;
   padding: 0.12em 0.4em;
   font-size: 0.84em;
   font-family: ui-monospace, SFMono-Regular, Monaco, Consolas, monospace;
-  color: #c4b5fd;
+  color: var(--md-code-color);
 }
 
 .markdown-body pre {
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.07);
+  background: var(--md-pre-bg);
+  border: 1px solid var(--md-pre-border);
   border-radius: 10px;
   padding: 0.85em 1.1em;
   overflow-x: auto;
@@ -183,23 +340,23 @@
   border: none;
   padding: 0;
   font-size: 0.87em;
-  color: rgba(255, 255, 255, 0.78);
+  color: var(--md-pre-code);
 }
 
 .markdown-body strong {
   font-weight: 600;
-  color: rgba(255, 255, 255, 0.95);
+  color: var(--md-strong);
 }
 
 .markdown-body em {
-  color: rgba(255, 255, 255, 0.60);
+  color: var(--md-em);
 }
 
 .markdown-body blockquote {
-  border-left: 3px solid rgba(139, 92, 246, 0.38);
+  border-left: 3px solid var(--md-blockquote-border);
   padding-left: 0.85em;
   margin: 0.5em 0;
-  color: rgba(255, 255, 255, 0.50);
+  color: var(--md-blockquote-text);
 }
 
 .markdown-body h1,
@@ -208,7 +365,7 @@
   font-weight: 600;
   margin: 0.7em 0 0.3em;
   line-height: 1.3;
-  color: rgba(255, 255, 255, 0.92);
+  color: var(--md-heading);
 }
 
 .markdown-body h1 { font-size: 1.1em; }
@@ -224,32 +381,32 @@
 
 .markdown-body th,
 .markdown-body td {
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--md-table-border);
   padding: 0.35em 0.7em;
   text-align: left;
 }
 
 .markdown-body th {
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--md-th-bg);
   font-weight: 600;
-  color: rgba(255, 255, 255, 0.88);
+  color: var(--md-th-text);
 }
 
 .markdown-body a {
-  color: #a78bfa;
+  color: var(--md-link);
   text-decoration: underline;
   text-underline-offset: 2px;
 }
 
 .markdown-body hr {
   border: none;
-  border-top: 1px solid rgba(255, 255, 255, 0.07);
+  border-top: 1px solid var(--md-hr);
   margin: 0.8em 0;
 }
 
-/* ── KaTeX math rendering overrides (dark theme) ─────────────────── */
+/* ── KaTeX math rendering overrides ─────────────────── */
 .markdown-body .katex {
-  color: rgba(255, 255, 255, 0.88);
+  color: var(--md-katex);
   font-size: 1.05em;
 }
 

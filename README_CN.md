@@ -10,16 +10,14 @@
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.104+-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
 [![Docker](https://img.shields.io/badge/Docker-ready-2496ED?logo=docker&logoColor=white)](https://www.docker.com/)
 
-[报告问题](https://github.com/Sun-Yize/ThinkLingo/issues) · [功能建议](https://github.com/Sun-Yize/ThinkLingo/issues)
-
-[English](README.md) | **中文**
+[English](README.md) | **中文** | [日本語](README_JA.md) | [한국어](README_KO.md)
 
 </div>
 
-![ThinkLingo UI](assets/img01.png)
-
 > [!Important]
 > ThinkLingo 已正式上线！访问 [thinklingo.yizesun.com](https://thinklingo.yizesun.com) 即可体验，无需部署。
+
+![ThinkLingo UI](assets/img01.png)
 
 ---
 

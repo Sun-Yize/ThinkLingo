@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { ConversationTurn, WebSocketMessage, Language, ResponseType, ChatSettings, ConversationMeta, SavedConversation } from '../types/chat';
 import { getT } from '../utils/i18n';
+import { useTheme } from '../utils/theme';
 import DualColumnView from './DualColumnView';
 import SettingsModal from './SettingsModal';
 import ApiConfigModal from './ApiConfigModal';
@@ -135,6 +136,7 @@ function generateId(): string {
 // ─────────────────────────────────────────────────────────────────────
 
 const TranslationChat: React.FC = () => {
+  const { isDark, toggleTheme } = useTheme();
   const [turns, setTurns]               = useState<ConversationTurn[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [scrollTrigger, setScrollTrigger] = useState(0);
@@ -812,14 +814,19 @@ const TranslationChat: React.FC = () => {
 
   const t = getT(settings.sourceLanguage);
 
+  // ── Theme-aware class helpers ──────────────────────────────────────
+  const btnClass = isDark
+    ? 'text-white/45 hover:text-white/85 bg-white/[0.04] hover:bg-white/[0.08] border-white/[0.08] hover:border-white/[0.15]'
+    : 'text-slate-500 hover:text-slate-800 bg-slate-900/[0.04] hover:bg-slate-900/[0.08] border-slate-300 hover:border-slate-400';
+
   return (
     <div
-      className="fixed inset-0 flex overflow-hidden"
+      className="fixed inset-0 flex overflow-hidden transition-colors duration-300"
       style={{
-        background: '#0B0B14',
+        background: 'var(--page-bg)',
         backgroundImage:
-          'radial-gradient(ellipse at 18% 12%, rgba(124,58,237,0.16) 0%, transparent 50%),' +
-          'radial-gradient(ellipse at 82% 88%, rgba(6,182,212,0.12) 0%, transparent 50%)',
+          `radial-gradient(ellipse at 18% 12%, var(--ambient-violet) 0%, transparent 50%),` +
+          `radial-gradient(ellipse at 82% 88%, var(--ambient-cyan) 0%, transparent 50%)`,
       }}
     >
       {/* ── Sidebar (inline, always pinned when open) ─────────────── */}
@@ -837,14 +844,19 @@ const TranslationChat: React.FC = () => {
       {/* ── Main content column ──────────────────────────────────── */}
       <div className="flex-1 flex flex-col overflow-hidden min-w-0">
       {/* ── Fixed header ──────────────────────────────────────────── */}
-      <header className="relative flex-shrink-0 flex items-center justify-between px-2 md:px-6 h-[46px] md:h-[58px] bg-[rgba(11,11,20,0.82)] backdrop-blur-xl">
+      <header
+        className="relative flex-shrink-0 flex items-center justify-between px-2 md:px-6 h-[46px] md:h-[58px] backdrop-blur-xl"
+        style={{ background: 'var(--chrome-bg)' }}
+      >
         <div className="flex items-center gap-2 md:gap-3 min-w-0">
           {/* History toggle button */}
           <button
             onClick={() => setHistoryOpen(prev => !prev)}
             aria-label={t.chatHistory}
             className={`flex-shrink-0 w-9 h-9 md:w-8 md:h-8 flex items-center justify-center rounded-lg transition-all duration-200 cursor-pointer ${
-              historyOpen ? 'text-violet-400/70 bg-violet-500/[0.10]' : 'text-white/35 hover:text-white/75 hover:bg-white/[0.06]'
+              historyOpen
+                ? isDark ? 'text-violet-400/70 bg-violet-500/[0.10]' : 'text-violet-600 bg-violet-100'
+                : isDark ? 'text-white/35 hover:text-white/75 hover:bg-white/[0.06]' : 'text-slate-400 hover:text-slate-700 hover:bg-slate-100'
             }`}
           >
             <svg className="w-[18px] h-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
@@ -872,11 +884,11 @@ const TranslationChat: React.FC = () => {
             <div className="flex flex-col gap-[1px] min-w-0">
               <span
                 className="text-[15px] md:text-[18px] font-bold tracking-[-0.3px] leading-tight truncate"
-                style={{ background: 'linear-gradient(90deg, #c4b5fd 0%, #f0f0ff 50%, #67e8f9 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}
+                style={{ background: 'var(--title-gradient)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}
               >
                 {t.appTitle}
               </span>
-              <span className="hidden md:inline text-[11px] text-white/50 tracking-[0.1px] leading-relaxed">
+              <span className={`hidden md:inline text-[11px] tracking-[0.1px] leading-relaxed ${isDark ? 'text-white/50' : 'text-slate-500'}`}>
                 {t.appTagline
                   .replace('{source}', t.languageNames[settings.sourceLanguage] ?? settings.sourceLanguage)
                   .replace('{processing}', t.languageNames[settings.processingLanguage] ?? settings.processingLanguage)}
@@ -887,11 +899,28 @@ const TranslationChat: React.FC = () => {
 
         {/* Header buttons */}
         <div className="flex items-center gap-1.5 md:gap-2 flex-shrink-0">
+          {/* Theme toggle button */}
+          <button
+            onClick={toggleTheme}
+            aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+            className={`flex items-center justify-center w-9 h-9 md:w-8 md:h-8 rounded-xl border transition-all duration-200 cursor-pointer ${btnClass}`}
+          >
+            {isDark ? (
+              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v2.25m6.364.386l-1.591 1.591M21 12h-2.25m-.386 6.364l-1.591-1.591M12 18.75V21m-4.773-4.227l-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z"/>
+              </svg>
+            ) : (
+              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M21.752 15.002A9.718 9.718 0 0118 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 003 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 009.002-5.998z"/>
+              </svg>
+            )}
+          </button>
+
           {/* Model config button */}
           <button
               onClick={() => setApiConfigOpen(true)}
               aria-label="Open model configuration"
-              className="flex items-center gap-2 px-2.5 py-2 md:px-3.5 text-[12.5px] font-semibold text-white/45 hover:text-white/85 bg-white/[0.04] hover:bg-white/[0.08] rounded-xl border border-white/[0.08] hover:border-white/[0.15] transition-all duration-200 cursor-pointer"
+              className={`flex items-center gap-2 px-2.5 py-2 md:px-3.5 text-[12.5px] font-semibold rounded-xl border transition-all duration-200 cursor-pointer ${btnClass}`}
             >
               <svg className="w-4 h-4 md:w-3.5 md:h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.455 2.456L21.75 6l-1.036.259a3.375 3.375 0 00-2.455 2.456zM16.894 20.567L16.5 21.75l-.394-1.183a2.25 2.25 0 00-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 001.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 001.423 1.423l1.183.394-1.183.394a2.25 2.25 0 00-1.423 1.423z"/>
@@ -903,7 +932,7 @@ const TranslationChat: React.FC = () => {
           <button
             onClick={() => setSettingsOpen(true)}
             aria-label="Open settings"
-            className="group flex items-center gap-2 px-2.5 py-2 md:px-3.5 text-[12.5px] font-semibold text-white/45 hover:text-white/85 bg-white/[0.04] hover:bg-white/[0.08] rounded-xl border border-white/[0.08] hover:border-white/[0.15] transition-all duration-200 cursor-pointer"
+            className={`group flex items-center gap-2 px-2.5 py-2 md:px-3.5 text-[12.5px] font-semibold rounded-xl border transition-all duration-200 cursor-pointer ${btnClass}`}
           >
             <svg className="w-4 h-4 md:w-3.5 md:h-3.5 transition-transform duration-300 group-hover:rotate-[55deg]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7">
               <path strokeLinecap="round" strokeLinejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.324.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.24-.438.613-.431.992a6.759 6.759 0 010 .255c-.007.378.138.75.43.99l1.005.828c.424.35.534.954.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.57 6.57 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.28c-.09.543-.56.941-1.11.941h-2.594c-.55 0-1.02-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.992a6.932 6.932 0 010-.255c.007-.378-.138-.75-.43-.99l-1.004-.828a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.087.22-.128.332-.183.582-.495.644-.869l.214-1.281z"/>
@@ -916,7 +945,7 @@ const TranslationChat: React.FC = () => {
         {/* Bottom separator — dual-tone, maps to the two columns below */}
         <div
           className="absolute bottom-0 left-0 right-0 h-px"
-          style={{ background: 'linear-gradient(90deg, rgba(139,92,246,0.35) 0%, rgba(139,92,246,0.35) 50%, rgba(6,182,212,0.28) 50%, rgba(6,182,212,0.28) 100%)' }}
+          style={{ background: 'var(--sep-header)' }}
         />
       </header>
 
@@ -929,12 +958,17 @@ const TranslationChat: React.FC = () => {
           <div className="absolute bottom-3 left-0 right-0 flex justify-center z-10 pointer-events-none animate-fade-in">
             <button
               onClick={handleStop}
-              className="pointer-events-auto flex items-center gap-2 pl-3 pr-4 py-2 rounded-full bg-[#1a1a2e]/90 backdrop-blur-md border border-white/[0.12] text-white/50 hover:text-white/70 hover:border-white/[0.22] hover:bg-[#1a1a2e] shadow-[0_4px_24px_rgba(0,0,0,0.5)] transition-all duration-200 cursor-pointer active:scale-95"
+              className={`pointer-events-auto flex items-center gap-2 pl-3 pr-4 py-2 rounded-full backdrop-blur-md transition-all duration-200 cursor-pointer active:scale-95 ${
+                isDark
+                  ? 'border border-white/[0.12] text-white/50 hover:text-white/70 hover:border-white/[0.22] shadow-[0_4px_24px_rgba(0,0,0,0.5)]'
+                  : 'border border-slate-200 text-slate-500 hover:text-slate-700 hover:border-slate-300 shadow-[0_4px_24px_rgba(0,0,0,0.08)]'
+              }`}
+              style={{ background: 'var(--stop-btn-bg)' }}
             >
               <span className="relative flex items-center justify-center w-5 h-5">
                 <svg className="absolute inset-0 w-5 h-5 animate-spin" viewBox="0 0 20 20" fill="none">
-                  <circle cx="10" cy="10" r="8.5" stroke="rgba(255,255,255,0.12)" strokeWidth="1.5" />
-                  <path d="M10 1.5a8.5 8.5 0 0 1 8.5 8.5" stroke="rgba(255,255,255,0.65)" strokeWidth="1.5" strokeLinecap="round" />
+                  <circle cx="10" cy="10" r="8.5" stroke={isDark ? 'rgba(255,255,255,0.12)' : 'rgba(30,20,50,0.10)'} strokeWidth="1.5" />
+                  <path d="M10 1.5a8.5 8.5 0 0 1 8.5 8.5" stroke={isDark ? 'rgba(255,255,255,0.65)' : 'rgba(30,20,50,0.55)'} strokeWidth="1.5" strokeLinecap="round" />
                 </svg>
                 <svg className="relative w-[7px] h-[7px]" viewBox="0 0 8 8" fill="currentColor">
                   <rect width="8" height="8" rx="1.5" />

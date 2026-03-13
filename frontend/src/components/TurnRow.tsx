@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { ConversationTurn, ColumnFocus } from '../types/chat';
+import { useTheme } from '../utils/theme';
 import MessageBubble from './MessageBubble';
 import { getT } from '../utils/i18n';
 
@@ -25,27 +26,28 @@ const ThinkingBlock: React.FC<{
   expanded: boolean;
   onToggle: () => void;
 }> = ({ content, status, label, expanded, onToggle }) => {
+  const { isDark } = useTheme();
   const isStreaming = status === 'streaming';
 
   return (
     <div
-      className="rounded-xl border border-cyan-500/15 overflow-hidden"
-      style={{ background: 'rgba(6,182,212,0.03)' }}
+      className={`rounded-xl border overflow-hidden ${isDark ? 'border-cyan-500/15' : 'border-cyan-200'}`}
+      style={{ background: 'var(--thinking-bg)' }}
     >
       <button
         onClick={onToggle}
-        className="w-full flex items-center gap-1.5 px-3 py-1.5 cursor-pointer hover:bg-cyan-500/[0.04] transition-colors"
+        className={`w-full flex items-center gap-1.5 px-3 py-1.5 cursor-pointer transition-colors ${isDark ? 'hover:bg-cyan-500/[0.04]' : 'hover:bg-cyan-50'}`}
       >
         <svg
-          className={`w-3 h-3 text-cyan-400/50 flex-shrink-0 transition-transform duration-200 ${expanded ? 'rotate-90' : ''}`}
+          className={`w-3 h-3 flex-shrink-0 transition-transform duration-200 ${expanded ? 'rotate-90' : ''} ${isDark ? 'text-cyan-400/50' : 'text-cyan-500'}`}
           viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"
         >
           <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7"/>
         </svg>
-        <svg className="w-3 h-3 text-cyan-400/50 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+        <svg className={`w-3 h-3 flex-shrink-0 ${isDark ? 'text-cyan-400/50' : 'text-cyan-500'}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
           <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z"/>
         </svg>
-        <span className="text-[10px] font-semibold text-cyan-400/50 uppercase tracking-widest">
+        <span className={`text-[10px] font-semibold uppercase tracking-widest ${isDark ? 'text-cyan-400/50' : 'text-cyan-500'}`}>
           {label}
         </span>
         {isStreaming && (
@@ -53,7 +55,7 @@ const ThinkingBlock: React.FC<{
             {[0, 1, 2].map(i => (
               <span
                 key={i}
-                className="w-1 h-1 rounded-full bg-cyan-400/40 animate-bounce"
+                className={`w-1 h-1 rounded-full animate-bounce ${isDark ? 'bg-cyan-400/40' : 'bg-cyan-400'}`}
                 style={{ animationDelay: `${i * 150}ms` }}
               />
             ))}
@@ -61,11 +63,11 @@ const ThinkingBlock: React.FC<{
         )}
       </button>
       {expanded && (
-        <div className="px-3 py-2.5 border-t border-cyan-500/10">
-          <p className="text-[12px] leading-relaxed text-white/40 whitespace-pre-wrap">
+        <div className={`px-3 py-2.5 border-t ${isDark ? 'border-cyan-500/10' : 'border-cyan-100'}`}>
+          <p className={`text-[12px] leading-relaxed whitespace-pre-wrap ${isDark ? 'text-white/40' : 'text-slate-500'}`}>
             {content}
             {isStreaming && (
-              <span className="inline-block w-[2px] h-[13px] bg-cyan-400/50 ml-[1px] align-middle animate-pulse" />
+              <span className={`inline-block w-[2px] h-[13px] ml-[1px] align-middle animate-pulse ${isDark ? 'bg-cyan-400/50' : 'bg-cyan-500'}`} />
             )}
           </p>
         </div>
@@ -83,27 +85,39 @@ const PromptBlock: React.FC<{
   onToggle: () => void;
   variant: 'violet' | 'cyan';
 }> = ({ content, status, label, expanded, onToggle, variant }) => {
+  const { isDark } = useTheme();
   const isStreaming = status === 'streaming';
   const isViolet = variant === 'violet';
-  const borderColor  = isViolet ? 'border-violet-500/15' : 'border-cyan-500/15';
-  const bgStyle      = isViolet ? { background: 'rgba(139,92,246,0.04)' } : { background: 'rgba(6,182,212,0.04)' };
-  const hoverBg      = isViolet ? 'hover:bg-violet-500/[0.04]' : 'hover:bg-cyan-500/[0.04]';
-  const chevronColor = isViolet ? 'text-violet-400/50' : 'text-cyan-400/50';
-  const iconColor    = isViolet ? 'text-violet-400/50' : 'text-cyan-400/50';
-  const labelColor   = isViolet ? 'text-violet-400/50' : 'text-cyan-400/50';
-  const dotColor     = isViolet ? 'bg-violet-400/40'   : 'bg-cyan-400/40';
-  const borderT      = isViolet ? 'border-violet-500/10' : 'border-cyan-500/10';
-  const cursorColor  = isViolet ? 'bg-violet-400/50'    : 'bg-cyan-400/50';
-  const textColor    = 'text-white/55';
+
+  const borderColor  = isViolet
+    ? isDark ? 'border-violet-500/15' : 'border-violet-200'
+    : isDark ? 'border-cyan-500/15' : 'border-cyan-200';
+  const bgVar        = isViolet ? 'var(--prompt-bg-violet)' : 'var(--prompt-bg-cyan)';
+  const hoverBg      = isViolet
+    ? isDark ? 'hover:bg-violet-500/[0.04]' : 'hover:bg-violet-50'
+    : isDark ? 'hover:bg-cyan-500/[0.04]' : 'hover:bg-cyan-50';
+  const iconColor    = isViolet
+    ? isDark ? 'text-violet-400/50' : 'text-violet-500'
+    : isDark ? 'text-cyan-400/50' : 'text-cyan-500';
+  const dotColor     = isViolet
+    ? isDark ? 'bg-violet-400/40' : 'bg-violet-400'
+    : isDark ? 'bg-cyan-400/40' : 'bg-cyan-400';
+  const borderT      = isViolet
+    ? isDark ? 'border-violet-500/10' : 'border-violet-100'
+    : isDark ? 'border-cyan-500/10' : 'border-cyan-100';
+  const cursorColor  = isViolet
+    ? isDark ? 'bg-violet-400/50' : 'bg-violet-500'
+    : isDark ? 'bg-cyan-400/50' : 'bg-cyan-500';
+  const textColor    = isDark ? 'text-white/55' : 'text-slate-500';
 
   return (
-    <div className={`rounded-xl border ${borderColor} overflow-hidden`} style={bgStyle}>
+    <div className={`rounded-xl border ${borderColor} overflow-hidden`} style={{ background: bgVar }}>
       <button
         onClick={onToggle}
         className={`w-full flex items-center gap-1.5 px-3 py-1.5 cursor-pointer ${hoverBg} transition-colors`}
       >
         <svg
-          className={`w-3 h-3 ${chevronColor} flex-shrink-0 transition-transform duration-200 ${expanded ? 'rotate-90' : ''}`}
+          className={`w-3 h-3 ${iconColor} flex-shrink-0 transition-transform duration-200 ${expanded ? 'rotate-90' : ''}`}
           viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"
         >
           <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7"/>
@@ -112,7 +126,7 @@ const PromptBlock: React.FC<{
           <path strokeLinecap="round" strokeLinejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.324.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.24-.438.613-.431.992a6.759 6.759 0 010 .255c-.007.378.138.75.43.99l1.005.828c.424.35.534.954.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.57 6.57 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.28c-.09.543-.56.941-1.11.941h-2.594c-.55 0-1.02-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.992a6.932 6.932 0 010-.255c.007-.378-.138-.75-.43-.99l-1.004-.828a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.087.22-.128.332-.183.582-.495.644-.869l.214-1.281z"/>
           <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
         </svg>
-        <span className={`text-[10px] font-semibold ${labelColor} uppercase tracking-widest`}>
+        <span className={`text-[10px] font-semibold ${iconColor} uppercase tracking-widest`}>
           {label}
         </span>
         {isStreaming && (
@@ -141,16 +155,8 @@ const PromptBlock: React.FC<{
   );
 };
 
-// ─────────────────────────────────────────────────────────────────────
-// TurnRow — row-aligned dual-column layout
-//
-// Instead of two independent flex columns, each section (routing label,
-// system prompt, user message, thinking, AI response) is rendered as a
-// grid row with left + right cells. CSS grid auto-sizes each row to the
-// taller cell, keeping corresponding sections horizontally aligned.
-// ─────────────────────────────────────────────────────────────────────
-
 const TurnRow: React.FC<TurnRowProps> = ({ turn, sourceLanguage, processingLanguage, columnFocus }) => {
+  const { isDark } = useTheme();
   const t = getT(sourceLanguage);
   const tRight = getT(processingLanguage);
 
@@ -187,15 +193,16 @@ const TurnRow: React.FC<TurnRowProps> = ({ turn, sourceLanguage, processingLangu
   }, [turn.leftAiStatus, turn.rightAiStatus, turn.rightUserStatus, t]);
 
   // ── Cell class helpers ──────────────────────────────────────────
-  // Each cell gets py-2 for inter-row spacing. The grid container adds
-  // pt-2/pb-2 (md: pt-4/pb-4), so total top/bottom matches the
-  // original py-4 md:py-6. Hover bg fills the cell padding seamlessly.
   const lCell = leftHidden
     ? 'overflow-hidden'
-    : `min-w-0 py-2 px-3 md:px-6 group-hover:bg-violet-500/[0.018] transition-colors duration-200${showDivider ? ' border-r border-white/[0.04]' : ''}`;
+    : `min-w-0 py-2 px-3 md:px-6 transition-colors duration-200${
+        isDark ? ' group-hover:bg-violet-500/[0.018]' : ' group-hover:bg-violet-50/50'
+      }${showDivider ? isDark ? ' border-r border-white/[0.04]' : ' border-r border-slate-200/60' : ''}`;
   const rCell = rightHidden
     ? 'overflow-hidden'
-    : 'min-w-0 py-2 px-3 md:px-6 group-hover:bg-cyan-500/[0.018] transition-colors duration-200';
+    : `min-w-0 py-2 px-3 md:px-6 transition-colors duration-200${
+        isDark ? ' group-hover:bg-cyan-500/[0.018]' : ' group-hover:bg-cyan-50/50'
+      }`;
 
   const hasRouting = !!turn.routingLabel;
   const hasError   = turn.status === 'error' && !!turn.error;
@@ -211,10 +218,10 @@ const TurnRow: React.FC<TurnRowProps> = ({ turn, sourceLanguage, processingLangu
           <div className={lCell}>
             {!leftHidden && (
               <div className="flex items-center gap-1.5 px-1">
-                <svg className="w-3 h-3 flex-shrink-0 text-violet-500/50" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <svg className={`w-3 h-3 flex-shrink-0 ${isDark ? 'text-violet-500/50' : 'text-violet-400'}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
                 </svg>
-                <span className="text-[11px] tracking-wide text-violet-400/55">
+                <span className={`text-[11px] tracking-wide ${isDark ? 'text-violet-400/55' : 'text-violet-500'}`}>
                   {t.routingBadgePrefix} {turn.routingLabel}
                 </span>
               </div>
@@ -223,10 +230,10 @@ const TurnRow: React.FC<TurnRowProps> = ({ turn, sourceLanguage, processingLangu
           <div className={rCell}>
             {!rightHidden && (
               <div className="flex items-center gap-1.5 px-1">
-                <svg className="w-3 h-3 flex-shrink-0 text-cyan-500/50" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <svg className={`w-3 h-3 flex-shrink-0 ${isDark ? 'text-cyan-500/50' : 'text-cyan-400'}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
                 </svg>
-                <span className="text-[11px] tracking-wide text-cyan-400/55">
+                <span className={`text-[11px] tracking-wide ${isDark ? 'text-cyan-400/55' : 'text-cyan-500'}`}>
                   {tRight.routingBadgePrefix} {turn.routingLabel}
                 </span>
               </div>
@@ -357,10 +364,7 @@ const TurnRow: React.FC<TurnRowProps> = ({ turn, sourceLanguage, processingLangu
       {/* Dual-tone bottom separator */}
       <div
         className="absolute bottom-0 left-0 right-0 h-px"
-        style={{
-          background:
-            'linear-gradient(90deg, rgba(139,92,246,0.10) 0%, rgba(139,92,246,0.10) 50%, rgba(6,182,212,0.08) 50%, rgba(6,182,212,0.08) 100%)',
-        }}
+        style={{ background: 'var(--sep-row)' }}
       />
     </div>
   );

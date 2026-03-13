@@ -5,6 +5,7 @@ import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 import 'katex/dist/katex.min.css';
 import { getT } from '../utils/i18n';
+import { useTheme } from '../utils/theme';
 
 export type BubbleStatus = 'idle' | 'pending' | 'translating' | 'streaming' | 'complete';
 
@@ -19,6 +20,7 @@ interface MessageBubbleProps {
 
 // Copy button for code blocks — appears on hover at top-right of <pre>
 const CodeBlockCopyButton: React.FC<{ code: string }> = ({ code }) => {
+  const { isDark } = useTheme();
   const [copied, setCopied] = useState(false);
 
   const handleCopy = useCallback(async () => {
@@ -45,7 +47,9 @@ const CodeBlockCopyButton: React.FC<{ code: string }> = ({ code }) => {
       className={`absolute bottom-2.5 right-2.5 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-all duration-150 cursor-pointer border ${
         copied
           ? 'bg-emerald-500/15 border-emerald-500/25 text-emerald-400'
-          : 'bg-white/[0.06] border-white/[0.10] text-white/40 hover:bg-white/[0.12] hover:text-white/70 hover:border-white/[0.18]'
+          : isDark
+            ? 'bg-white/[0.06] border-white/[0.10] text-white/40 hover:bg-white/[0.12] hover:text-white/70 hover:border-white/[0.18]'
+            : 'bg-slate-100 border-slate-200 text-slate-400 hover:bg-slate-200 hover:text-slate-600 hover:border-slate-300'
       }`}
     >
       {copied ? (
@@ -102,19 +106,6 @@ const SparkleIcon: React.FC<{ className?: string }> = ({ className }) => (
   </svg>
 );
 
-// AI badge components — defined outside to keep stable references
-const AIBadgeDefault = (
-  <div className="flex-shrink-0 mt-[2px] w-[18px] h-[18px] rounded-[5px] flex items-center justify-center border bg-violet-500/[0.10] border-violet-500/[0.18]">
-    <SparkleIcon className="w-2.5 h-2.5 text-violet-400/60" />
-  </div>
-);
-
-const AIBadgeProcessing = (
-  <div className="flex-shrink-0 mt-[2px] w-[18px] h-[18px] rounded-[5px] flex items-center justify-center border bg-cyan-500/[0.08] border-cyan-500/[0.16]">
-    <SparkleIcon className="w-2.5 h-2.5 text-cyan-400/55" />
-  </div>
-);
-
 const MessageBubble: React.FC<MessageBubbleProps> = ({
   role,
   content,
@@ -123,25 +114,35 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
   variant = 'default',
   statusHint,
 }) => {
+  const { isDark } = useTheme();
   const isUser       = role === 'user';
   const isProcessing = variant === 'processing';
   const t            = getT(sourceLanguage);
 
   if (status === 'idle') return null;
 
-  const AIBadge = isProcessing ? AIBadgeProcessing : AIBadgeDefault;
+  // AI badge components
+  const AIBadge = isProcessing ? (
+    <div className={`flex-shrink-0 mt-[2px] w-[18px] h-[18px] rounded-[5px] flex items-center justify-center border ${isDark ? 'bg-cyan-500/[0.08] border-cyan-500/[0.16]' : 'bg-cyan-50 border-cyan-200'}`}>
+      <SparkleIcon className={`w-2.5 h-2.5 ${isDark ? 'text-cyan-400/55' : 'text-cyan-500'}`} />
+    </div>
+  ) : (
+    <div className={`flex-shrink-0 mt-[2px] w-[18px] h-[18px] rounded-[5px] flex items-center justify-center border ${isDark ? 'bg-violet-500/[0.10] border-violet-500/[0.18]' : 'bg-violet-50 border-violet-200'}`}>
+      <SparkleIcon className={`w-2.5 h-2.5 ${isDark ? 'text-violet-400/60' : 'text-violet-500'}`} />
+    </div>
+  );
 
   // ── Translating / pending skeleton ──────────────────────────────
   if (status === 'pending' || status === 'translating') {
     const hint = statusHint ?? t.translating;
     if (isUser) {
       const skeletonBg = isProcessing
-        ? 'bg-cyan-500/[0.08] border-cyan-500/[0.13]'
-        : 'bg-violet-500/[0.09] border-violet-500/[0.14]';
+        ? isDark ? 'bg-cyan-500/[0.08] border-cyan-500/[0.13]' : 'bg-cyan-50 border-cyan-200'
+        : isDark ? 'bg-violet-500/[0.09] border-violet-500/[0.14]' : 'bg-violet-50 border-violet-200';
       return (
         <div className="flex justify-end">
           <div className={`${skeletonBg} border rounded-2xl rounded-tr-[6px] px-4 py-2.5 flex items-center gap-2`}>
-            <span className="text-[12px] text-white/28 tracking-wide">{hint}</span>
+            <span className={`text-[12px] tracking-wide ${isDark ? 'text-white/28' : 'text-slate-400'}`}>{hint}</span>
             <div className="translating-skeleton w-14 rounded-full" />
           </div>
         </div>
@@ -152,7 +153,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
       <div className="flex items-start gap-2.5">
         {AIBadge}
         <div className="flex items-center gap-2 pt-[1px]">
-          <span className="text-[12px] text-white/28 tracking-wide">{hint}</span>
+          <span className={`text-[12px] tracking-wide ${isDark ? 'text-white/28' : 'text-slate-400'}`}>{hint}</span>
           <div className="translating-skeleton w-20 rounded-full" />
         </div>
       </div>
@@ -162,8 +163,12 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
   // ── User bubble ─────────────────────────────────────────────────
   if (isUser) {
     const bubbleStyle = isProcessing
-      ? 'bg-cyan-500/[0.10] text-cyan-50/88 border border-cyan-500/[0.16] shadow-[0_2px_14px_rgba(6,182,212,0.07)]'
-      : 'bg-violet-500/[0.11] text-violet-50/90 border border-violet-500/[0.18] shadow-[0_2px_14px_rgba(124,58,237,0.09)]';
+      ? isDark
+        ? 'bg-cyan-500/[0.10] text-cyan-50/88 border border-cyan-500/[0.16] shadow-[0_2px_14px_rgba(6,182,212,0.07)]'
+        : 'bg-cyan-50 text-cyan-900 border border-cyan-200 shadow-[0_2px_14px_rgba(6,182,212,0.06)]'
+      : isDark
+        ? 'bg-violet-500/[0.11] text-violet-50/90 border border-violet-500/[0.18] shadow-[0_2px_14px_rgba(124,58,237,0.09)]'
+        : 'bg-violet-50 text-violet-900 border border-violet-200 shadow-[0_2px_14px_rgba(124,58,237,0.06)]';
     return (
       <div className="flex justify-end">
         <div
@@ -199,10 +204,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
 
 // Convert LaTeX delimiters: \[...\] → $$...$$, \(...\) → $...$
 const preprocessLaTeX = (text: string): string => {
-  // Replace display math \[...\] with $$...$$
-  // Use a regex that matches \[ ... \] across multiple lines
   text = text.replace(/\\\[([\s\S]*?)\\\]/g, (_, math) => `$$${math}$$`);
-  // Replace inline math \(...\) with $...$
   text = text.replace(/\\\(([\s\S]*?)\\\)/g, (_, math) => `$${math}$`);
   return text;
 };
