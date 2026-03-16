@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { flushSync } from 'react-dom';
 import type { StylesConfig } from 'react-select';
 
 // ── Theme types ──────────────────────────────────────────────────────
@@ -7,7 +8,7 @@ export type Theme = 'dark' | 'light';
 interface ThemeContextType {
   theme: Theme;
   isDark: boolean;
-  toggleTheme: () => void;
+  toggleTheme: (e?: { clientX: number; clientY: number }) => void;
 }
 
 const ThemeContext = createContext<ThemeContextType>({
@@ -17,6 +18,9 @@ const ThemeContext = createContext<ThemeContextType>({
 });
 
 const STORAGE_KEY = 'thinklingo_theme';
+
+// Track active view transition so we can skip it on rapid re-toggle
+let activeTransition: any = null;
 
 // ── Provider ─────────────────────────────────────────────────────────
 export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -33,9 +37,37 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     localStorage.setItem(STORAGE_KEY, theme);
   }, [theme]);
 
-  const toggleTheme = useCallback(() => {
-    setTheme(prev => (prev === 'dark' ? 'light' : 'dark'));
-  }, []);
+  const toggleTheme = useCallback((e?: { clientX: number; clientY: number }) => {
+    const root = document.documentElement;
+    // Use click position; fall back to top-right for keyboard activation
+    const x = e && e.clientX ? e.clientX : window.innerWidth - 50;
+    const y = e && e.clientY ? e.clientY : 28;
+    root.style.setProperty('--toggle-x', `${x}px`);
+    root.style.setProperty('--toggle-y', `${y}px`);
+
+    const newTheme = theme === 'dark' ? 'light' : 'dark';
+
+    const applyTheme = () => {
+      root.setAttribute('data-theme', newTheme);
+      localStorage.setItem(STORAGE_KEY, newTheme);
+      flushSync(() => setTheme(newTheme));
+    };
+
+    if ('startViewTransition' in document) {
+      // Skip any in-progress transition so a new one can start immediately
+      if (activeTransition) {
+        activeTransition.skipTransition();
+      }
+      const vt = (document as any).startViewTransition(applyTheme);
+      activeTransition = vt;
+      vt.finished.then(() => { activeTransition = null; }).catch(() => { activeTransition = null; });
+    } else {
+      // Fallback: smooth CSS transitions for older browsers
+      root.classList.add('theme-transitioning');
+      applyTheme();
+      setTimeout(() => root.classList.remove('theme-transitioning'), 450);
+    }
+  }, [theme]);
 
   return (
     <ThemeContext.Provider value={{ theme, isDark: theme === 'dark', toggleTheme }}>

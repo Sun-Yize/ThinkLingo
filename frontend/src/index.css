@@ -162,6 +162,48 @@
   --md-katex: rgba(30,20,50,0.88);
 }
 
+/* ── Theme wave transition (View Transition API) ─────────────────────── */
+::view-transition {
+  pointer-events: none;
+}
+
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
+::view-transition-old(root) {
+  z-index: 1;
+}
+
+::view-transition-new(root) {
+  z-index: 9999;
+  animation: theme-wave 1s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes theme-wave {
+  from { clip-path: circle(0px at var(--toggle-x, calc(100% - 2rem)) var(--toggle-y, 2rem)); }
+  to   { clip-path: circle(150vmax at var(--toggle-x, calc(100% - 2rem)) var(--toggle-y, 2rem)); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-new(root) {
+    animation-duration: 0.01s !important;
+  }
+}
+
+/* ── Theme transition fallback (browsers without View Transition API) ── */
+html.theme-transitioning,
+html.theme-transitioning *,
+html.theme-transitioning *::before,
+html.theme-transitioning *::after {
+  transition: background-color 0.4s ease,
+              color 0.4s ease,
+              border-color 0.4s ease,
+              box-shadow 0.4s ease !important;
+}
+
 /* ── Base styles ─────────────────────────────────────────────────────── */
 @layer base {
   html, body {
@@ -184,7 +226,6 @@
     padding: 0;
     background-color: var(--page-bg);
     color: var(--md-text);
-    transition: background-color 0.3s ease, color 0.3s ease;
     padding-left: env(safe-area-inset-left);
     padding-right: env(safe-area-inset-right);
   }

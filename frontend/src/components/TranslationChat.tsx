@@ -35,8 +35,17 @@ const MAX_CONVERSATIONS = 50;
 const STORAGE_INDEX_KEY = 'thinklingo_conv_index';
 const STORAGE_CONV_PREFIX = 'thinklingo_conv_';
 
+function detectSourceLanguage(): string {
+  try {
+    const lang = navigator.language.split('-')[0].toLowerCase();
+    if (lang === 'ja') return 'japanese';
+    if (lang === 'ko') return 'korean';
+  } catch { /* ignore */ }
+  return 'chinese';
+}
+
 const DEFAULT_SETTINGS: ChatSettings = {
-  sourceLanguage:          'chinese',
+  sourceLanguage:          detectSourceLanguage(),
   processingLanguage:      'english',
   responseType:            'general',
   translationMethod:       'llm',
@@ -64,34 +73,25 @@ interface StreamContext {
 }
 
 const SETTINGS_KEY = 'thinklingo_settings';
-const API_KEYS_SESSION_KEY = 'thinklingo_api_keys';
 
 function loadSettings(): ChatSettings {
   try {
     const stored = localStorage.getItem(SETTINGS_KEY);
     const base = stored ? JSON.parse(stored) : {};
 
-    // API keys live in sessionStorage (cleared on tab close) for security.
-    // Migrate: if keys still exist in localStorage, move them to sessionStorage once.
-    let apiKeys = DEFAULT_SETTINGS.apiKeys;
+    // One-time migration: move API keys from sessionStorage into localStorage
     try {
-      const sessionKeys = sessionStorage.getItem(API_KEYS_SESSION_KEY);
+      const sessionKeys = sessionStorage.getItem('thinklingo_api_keys');
       if (sessionKeys) {
-        apiKeys = { ...apiKeys, ...JSON.parse(sessionKeys) };
-      } else if (base.apiKeys) {
-        // One-time migration from localStorage → sessionStorage
-        apiKeys = { ...apiKeys, ...base.apiKeys };
-        sessionStorage.setItem(API_KEYS_SESSION_KEY, JSON.stringify(apiKeys));
-        // Remove migrated keys from localStorage
-        const { apiKeys: _, ...cleanBase } = base;
-        localStorage.setItem(SETTINGS_KEY, JSON.stringify(cleanBase));
+        base.apiKeys = { ...(base.apiKeys ?? {}), ...JSON.parse(sessionKeys) };
+        sessionStorage.removeItem('thinklingo_api_keys');
       }
     } catch { /* ignore */ }
 
     return {
       ...DEFAULT_SETTINGS,
       ...base,
-      apiKeys,
+      apiKeys:        { ...DEFAULT_SETTINGS.apiKeys,        ...(base.apiKeys        ?? {}) },
       mainLlm:        { ...DEFAULT_SETTINGS.mainLlm,        ...(base.mainLlm        ?? {}) },
       translationLlm: { ...DEFAULT_SETTINGS.translationLlm, ...(base.translationLlm ?? {}) },
     };
@@ -226,11 +226,8 @@ const TranslationChat: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    // Save non-sensitive settings to localStorage (persists across sessions)
-    const { apiKeys, ...safeSettings } = settings;
-    localStorage.setItem(SETTINGS_KEY, JSON.stringify(safeSettings));
-    // Save API keys to sessionStorage only (cleared when tab closes)
-    sessionStorage.setItem(API_KEYS_SESSION_KEY, JSON.stringify(apiKeys));
+    // Save all settings (including API keys) to localStorage
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
   }, [settings]);
 
   // Persist conversation index whenever it changes
@@ -901,7 +898,7 @@ const TranslationChat: React.FC = () => {
         <div className="flex items-center gap-1.5 md:gap-2 flex-shrink-0">
           {/* Theme toggle button */}
           <button
-            onClick={toggleTheme}
+            onClick={(e) => toggleTheme(e)}
             aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
             className={`flex items-center justify-center w-9 h-9 md:w-8 md:h-8 rounded-xl border transition-all duration-200 cursor-pointer ${btnClass}`}
           >

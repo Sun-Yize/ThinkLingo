@@ -70,7 +70,9 @@ class Config:
 
         self.deepseek_api_key  = _clean_key(deepseek_api_key  or os.getenv("DEEPSEEK_API_KEY"))
         self.openai_api_key    = _clean_key(openai_api_key    or os.getenv("OPENAI_API_KEY"))
-        self.anthropic_api_key = _clean_key(anthropic_api_key or os.getenv("ANTHROPIC_API_KEY"))
+        self.anthropic_api_key = _clean_key(
+            anthropic_api_key or os.getenv("ANTHROPIC_API_KEY") or os.getenv("ANTHROPIC_AUTH_TOKEN")
+        )
         self.google_api_key    = _clean_key(google_api_key    or os.getenv("GOOGLE_API_KEY"))
         self.qwen_api_key      = _clean_key(qwen_api_key      or os.getenv("QWEN_API_KEY"))
 
@@ -210,7 +212,7 @@ class Config:
             deepseek_model=os.getenv("DEEPSEEK_MODEL", "deepseek-chat"),
             openai_api_key=os.getenv("OPENAI_API_KEY"),
             openai_model=os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
-            anthropic_api_key=os.getenv("ANTHROPIC_API_KEY"),
+            anthropic_api_key=os.getenv("ANTHROPIC_API_KEY") or os.getenv("ANTHROPIC_AUTH_TOKEN"),
             claude_model=os.getenv("CLAUDE_MODEL", "claude-opus-4-6"),
             google_api_key=os.getenv("GOOGLE_API_KEY"),
             gemini_model=os.getenv("GEMINI_MODEL", "gemini-3.1-pro-preview"),
